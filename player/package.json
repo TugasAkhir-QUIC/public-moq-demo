@@ -1,7 +1,7 @@
 {
   "source": "src/index.html",
   "scripts": {
-    "serve": "parcel serve --https --cert ../cert/cert.pem --key ../cert/privkey.pem",
+    "serve": "parcel serve --https --cert ../cert/localhost.crt --key ../cert/localhost.key",
     "build": "parcel build src/index.html --no-optimize src/appsettings.js",
     "check": "tsc --noEmit"
   },

@@ -70,6 +70,7 @@ func NewServer(config ServerConfig, media *Media) (s *Server, err error) {
 
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{*config.Cert},
+		//NextProtos:   []string{"h3", "h3-32", "h3-31", "h3-30", "h3-29"},
 	}
 
 	mux := http.NewServeMux()
@@ -120,7 +121,7 @@ func NewServer(config ServerConfig, media *Media) (s *Server, err error) {
 func (s *Server) runTcProfile(ctx context.Context) (err error) {
 	// profiles: profile_cascade, profile_lte, profile_twitch
 	// set profile name to the one of the options above to run tc netem.
-    // TODO: get initial value from a configuration file, allow player to set this remotely
+	// TODO: get initial value from a configuration file, allow player to set this remotely
 	profile_name := ""
 	if profile_name == "" {
 		return nil
