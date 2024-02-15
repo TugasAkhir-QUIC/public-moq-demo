@@ -3,25 +3,19 @@ package warp
 import (
 	"context"
 	"crypto/tls"
-	"encoding/hex"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/TugasAkhir-QUIC/quic-go"
+	"github.com/TugasAkhir-QUIC/quic-go/http3"
+	"github.com/TugasAkhir-QUIC/webtransport-go"
 	"github.com/kixelated/invoker"
-	"github.com/kixelated/quic-go"
-	"github.com/kixelated/quic-go/http3"
-	"github.com/kixelated/quic-go/logging"
-	"github.com/kixelated/quic-go/qlog"
-	"github.com/kixelated/webtransport-go"
 )
 
 type Server struct {
@@ -54,19 +48,19 @@ func NewServer(config ServerConfig, media *Media) (s *Server, err error) {
 
 	quicConfig := &quic.Config{}
 
-	if config.LogDir != "" {
-		quicConfig.Tracer = qlog.NewTracer(func(p logging.Perspective, connectionID []byte) io.WriteCloser {
-			path := fmt.Sprintf("%s-%s.qlog", p, hex.EncodeToString(connectionID))
-
-			f, err := os.Create(filepath.Join(config.LogDir, path))
-			if err != nil {
-				// lame
-				panic(err)
-			}
-
-			return f
-		})
-	}
+	//if config.LogDir != "" {
+	//	quicConfig.Tracer = qlog.NewTracer(func(p logging.Perspective, connectionID []byte) io.WriteCloser {
+	//		path := fmt.Sprintf("%s-%s.qlog", p, hex.EncodeToString(connectionID))
+	//
+	//		f, err := os.Create(filepath.Join(config.LogDir, path))
+	//		if err != nil {
+	//			// lame
+	//			panic(err)
+	//		}
+	//
+	//		return f
+	//	})
+	//}
 
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{*config.Cert},
