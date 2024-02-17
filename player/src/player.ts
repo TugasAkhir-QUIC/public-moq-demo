@@ -141,14 +141,6 @@ export class Player {
 
 		console.log('in start | url: %s', this.url);
 		const quic = new WebTransport(this.url)
-		// const quic = new WebTransport(this.url, {
-		// 	serverCertificateHashes: [
-		// 	  {
-		// 		algorithm: 'sha-256',
-		// 		value: new Uint8Array([0x6, 0x85, 0x8a, 0x5d, 0x22, 0xcd, 0x8, 0x4f, 0x45, 0x6c, 0x96, 0x5c, 0xbe, 0xa7, 0xd4, 0x71, 0x99, 0xcf, 0xc1, 0xa9, 0xa4, 0x12, 0x43, 0x82, 0x37, 0x5c, 0x1e, 0x4f, 0xa1, 0x21, 0xe2, 0x18])
-		// 	  }
-		// 	]
-		//   })
 		this.quic = quic.ready.then(() => { return quic });
 
 		// Create a unidirectional stream for all of our messages
@@ -905,15 +897,4 @@ function fromCharCodeUint8(uint8arr: any[]) {
 		arr[i] = uint8arr[i];
 	}
 	return String.fromCharCode.apply(null, arr);
-}
-
-function base64ToArrayBuffer(base64: string) {
-	console.log(base64)
-    var binaryString = atob(base64);
-    var bytes = new Uint8Array(binaryString.length);
-    for (var i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-    }
-	console.log(bytes.buffer)
-    return bytes.buffer;
 }
