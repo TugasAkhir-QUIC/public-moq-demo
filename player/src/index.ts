@@ -16,6 +16,9 @@ const continueStreamingRef = document.getElementById("continue_streaming")
 const logContentRef = document.querySelector("#log_content") as HTMLTextAreaElement;
 const toggleLogRef = document.querySelector("#toggle_log") as HTMLAnchorElement;
 
+const datagramRef = document.getElementById("test_datagram") as HTMLButtonElement;
+const stremRef = document.getElementById("test_stream") as HTMLButtonElement;
+
 const params = new URLSearchParams(window.location.search)
 window.estimator = estimator;
 
@@ -326,3 +329,101 @@ vidRef.volume = 0.5
 
 // Try to autoplay but ignore errors on mobile; they need to click
 // vidRef.play().catch((e) => console.warn(e))
+
+datagramRef.addEventListener("click", async (e) => {
+    e.preventDefault();
+    const baseUrl = params.get("url") || window.config.serverURL
+    const url = baseUrl + "/test-datagram"
+    console.log("Creating WebTransport connection to " + url)
+    const quic = new WebTransport(url)
+    await quic.ready
+    
+    receiveDatagram(quic)
+
+    // Send datagrams to the server.
+    const writer = quic.datagrams.writable.getWriter()
+    let utf8Encode = new TextEncoder();
+    const data1 = "abc";
+    const data2 = "def";
+    for (let i = 1; i <= 20; i++) {
+        if (i % 2 !== 0) {
+            writer.write(utf8Encode.encode(data1));
+            console.log(`Sending Datagram ${i}: ${data1}`)
+        } else {
+            writer.write(utf8Encode.encode(data2));
+            console.log(`Sending Datagram ${i}: ${data2}`)
+        }
+    }
+})
+
+async function receiveDatagram(quic: WebTransport) {
+    // Read datagrams from the server.
+    const reader = quic.datagrams.readable.getReader();
+    let count = 1
+    while (true) {
+        const {value, done} = await reader.read();
+        if (done) {
+            break;
+        }
+        // value is a Uint8Array.
+        let utf8Decode = new TextDecoder;
+        console.log(`Received Datagram ${count}: ${utf8Decode.decode(value)}`);
+        count++
+    }  
+}
+
+stremRef.addEventListener("click", async (e) => {
+    e.preventDefault();
+    const baseUrl = params.get("url") || window.config.serverURL
+    const url = baseUrl + "/test-stream"
+    console.log("Creating WebTransport connection to " + url)
+    const quic = new WebTransport(url)
+    await quic.ready
+    const stream = await quic.createBidirectionalStream();
+    
+    receiveStream(stream.readable.getReader())
+
+    // Send streams to the server.
+    const writer = stream.writable.getWriter();
+    let utf8Encode = new TextEncoder();
+    const data1 = "abc";
+    const data2 = "def";
+    for (let i = 1; i <= 20; i++) {
+        if (i % 2 !== 0) {
+            writer.write(utf8Encode.encode(data1));
+            console.log(`Sending Stream ${i}: ${data1}`)
+        } else {
+            writer.write(utf8Encode.encode(data2));
+            console.log(`Sending Stream ${i}: ${data2}`)
+        }
+    }
+})
+
+async function receiveStream(reader: ReadableStreamDefaultReader) {
+    // Read streams from the server.
+    let count = 1
+    while (true) {
+        const {value, done} = await reader.read();
+        if (done) {
+            break;
+        }
+        // value is a Uint8Array.
+        let utf8Decode = new TextDecoder;
+        console.log(`Received Stream ${count}: ${utf8Decode.decode(value)}`);
+        count++
+    }  
+}
+
+// TODO: Not used, somehow different from https://developer.chrome.com/docs/capabilities/web-apis/webtransport#webtransportreceivestream
+async function readFrom(receiveStream: any) {
+    const reader = receiveStream;
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) {
+        break;
+      }
+      // value is a Uint8Array.
+      let utf8Decode = new TextDecoder;
+      console.log(utf8Decode.decode(value));
+    }
+}

@@ -19,6 +19,8 @@ github.com/TugasAkhir-QUIC/quic-go v0.0.1 h1:oOjknfSzEnxDbdbZwkKMrYjoSoO9W6tarCI
 github.com/TugasAkhir-QUIC/quic-go v0.0.1/go.mod h1:tJbxeyxkrBNDKfK5VKPb+l0tZxpMVEK6GmpJc6lMpB0=
 github.com/TugasAkhir-QUIC/webtransport-go v0.0.2 h1:UwxR3rMTK23sKAgoSG9tx3INyCeWEBIfIxkT0VVcwZg=
 github.com/TugasAkhir-QUIC/webtransport-go v0.0.2/go.mod h1:Hln8Y1WhKWhV7OnGBFQVTjP2E2Ayj5MlvvfnMfn8gYk=
+github.com/TugasAkhir-QUIC/webtransport-go v0.0.3 h1:2dl4WI+YWhrBSmrDx9cvAhDqiAnnk/KNPkr1htxrX4s=
+github.com/TugasAkhir-QUIC/webtransport-go v0.0.3/go.mod h1:Hln8Y1WhKWhV7OnGBFQVTjP2E2Ayj5MlvvfnMfn8gYk=
 github.com/abema/go-mp4 v1.2.0 h1:gi4X8xg/m179N/J15Fn5ugywN9vtI6PLk6iLldHGLAk=
 github.com/abema/go-mp4 v1.2.0/go.mod h1:vPl9t5ZK7K0x68jh12/+ECWBCXoWuIDtNgPtU2f04ws=
 github.com/anmitsu/go-shlex v0.0.0-20161002113705-648efa622239 h1:kFOfPq6dUM1hTo4JG6LR5AXSUEsOjtdm0kw0FtQtMJA=
