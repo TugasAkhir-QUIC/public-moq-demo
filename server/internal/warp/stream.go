@@ -14,6 +14,7 @@ import (
 // Otherwise we can't write to multiple concurrent streams in the same goroutine.
 type Stream struct {
 	inner webtransport.SendStream
+	// TODO: Add support for datagram
 
 	chunks [][]byte
 	closed bool

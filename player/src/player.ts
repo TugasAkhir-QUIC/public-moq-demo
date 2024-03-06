@@ -144,12 +144,17 @@ export class Player {
 		this.quic = quic.ready.then(() => { return quic });
 
 		// Create a unidirectional stream for all of our messages
+		// this.api = this.quic.then((q) => {
+		// 	return q.createUnidirectionalStream()
+		// })
+
 		this.api = this.quic.then((q) => {
-			return q.createUnidirectionalStream()
+			return q.datagrams.writable
 		})
 
 		// async functions
-		this.receiveStreams()
+		// this.receiveStreams()
+		this.receiveDatagrams()
 
 		if (this.activeBWTestInterval > 0) {
 			setTimeout(() => {
@@ -497,6 +502,51 @@ export class Player {
 		this.video.advance(playhead)
 	}
 
+	async receiveDatagrams() {
+		if (!this.quic) {
+			return;
+		}
+
+		let counter = 0;
+		const q = await this.quic
+
+		const datagrams = q.datagrams.readable.getReader();
+
+		while (true) {
+			++counter;
+			const result = await datagrams.read()
+
+			if (result.done) break
+
+			const datagram = result.value // TODO: problemnya adalah ini Uint8Array bukan StreamReader
+			this.handleDatagram(datagram) // don't await
+		}
+	}
+
+	async handleDatagram(datagram: any) {
+		while (true) {
+			const start = performance.now();
+
+
+			const size = datagram.length
+			const typ = new TextDecoder('utf-8').decode(datagram.slice(0, 4));
+			if (typ !== "warp") throw "expected warp atom"
+			if (size < 8) throw "atom too small"
+
+			const payload = new TextDecoder('utf-8').decode(datagram.slice(0, size - 8));
+			const msg = JSON.parse(payload) as Message
+
+			// TODO: benerin ini
+			if (msg.init) {
+				return this.handleInit(r, msg.init)
+			} else if (msg.segment) {
+				return this.handleSegment(r, msg.segment, start)
+			} else if (msg.pong) {
+				return this.handlePong(r, msg.pong)
+			}
+		}
+	}
+
 	async receiveStreams() {
 		if (!this.quic) {
 			return;
@@ -514,6 +564,7 @@ export class Player {
 			if (result.done) break
 
 			const stream = result.value
+			console.log(stream)
 			this.handleStream(stream) // don't await
 		}
 	}

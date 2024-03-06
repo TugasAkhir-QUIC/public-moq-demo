@@ -121,7 +121,7 @@ func NewServer(config ServerConfig, media *Media) (s *Server, err error) {
 		for {
 			msg, err := sess.ReceiveDatagram(r.Context())
 			if err != nil {
-				fmt.Println("Session closed, ending datagram listener:", err)
+				fmt.Println("SessionDatagram closed, ending datagram listener:", err)
 				break
 			}
 			fmt.Printf("Received datagram %d: %s\n", count, msg)
@@ -145,7 +145,7 @@ func NewServer(config ServerConfig, media *Media) (s *Server, err error) {
 		}
 		stream, err := sess.AcceptStream(r.Context())
 		if err != nil {
-			fmt.Println("Session closed, ending stream listener:", err)
+			fmt.Println("SessionDatagram closed, ending stream listener:", err)
 		}
 		count := 1
 		for {
