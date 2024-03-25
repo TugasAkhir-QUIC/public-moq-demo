@@ -14,7 +14,6 @@ import (
 // Otherwise we can't write to multiple concurrent streams in the same goroutine.
 type Stream struct {
 	inner webtransport.SendStream
-	// TODO: Add support for datagram
 
 	chunks [][]byte
 	closed bool
@@ -48,8 +47,12 @@ func (s *Stream) Run(ctx context.Context) (err error) {
 		s.chunks = s.chunks[len(s.chunks):]
 		s.mutex.Unlock()
 
+		//if len(chunks) != 0 {
+		//	fmt.Println(len(chunks))
+		//}
 		for _, chunk := range chunks {
 			_, err = s.inner.Write(chunk)
+			//fmt.Println(int64(len(chunk)))
 			if err != nil {
 				return err
 			}

@@ -18,6 +18,8 @@ const toggleLogRef = document.querySelector("#toggle_log") as HTMLAnchorElement;
 
 const datagramRef = document.getElementById("test_datagram") as HTMLButtonElement;
 const stremRef = document.getElementById("test_stream") as HTMLButtonElement;
+const datagramRef2 = document.getElementById("test_datagram2") as HTMLButtonElement;
+const stremRef2 = document.getElementById("test_stream2") as HTMLButtonElement;
 
 const params = new URLSearchParams(window.location.search)
 window.estimator = estimator;
@@ -343,8 +345,8 @@ datagramRef.addEventListener("click", async (e) => {
     // Send datagrams to the server.
     const writer = quic.datagrams.writable.getWriter()
     let utf8Encode = new TextEncoder();
-    const data1 = "abc";
-    const data2 = "def";
+    const data1 = "a b c d e f g h i j k l m n o p q r s t u v w x y z";
+    const data2 = "1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18";
     for (let i = 1; i <= 20; i++) {
         if (i % 2 !== 0) {
             writer.write(utf8Encode.encode(data1));
@@ -354,6 +356,43 @@ datagramRef.addEventListener("click", async (e) => {
             console.log(`Sending Datagram ${i}: ${data2}`)
         }
     }
+})
+
+datagramRef2.addEventListener("click", async (e) => {
+    e.preventDefault();
+    const baseUrl = params.get("url") || window.config.serverURL
+    console.log("Creating WebTransport connection to " + baseUrl)
+    const quic = new WebTransport(baseUrl)
+    await quic.ready
+    
+    receiveDatagram(quic)
+})
+
+stremRef2.addEventListener("click", async (e) => {
+    e.preventDefault();
+    const baseUrl = params.get("url") || window.config.serverURL
+    console.log("Creating WebTransport connection to " + baseUrl)
+    const quic = new WebTransport(baseUrl)
+    await quic.ready
+    
+    const uni = await quic.createUnidirectionalStream();
+    // uni.getWriter
+    const streams = quic.incomingUnidirectionalStreams.getReader();
+
+    let count = 1
+    while (true) {
+        const {value, done} = await streams.read();
+        if (done) {
+            break;
+        }
+        // value is a Uint8Array.
+        let utf8Decode = new TextDecoder;
+        const reader = value.getReader();
+        const a = await reader.read()
+        // console.log(a)
+        console.log(`Received Stream ${count}: ${utf8Decode.decode(a.value)}`);
+        count++
+    } 
 })
 
 async function receiveDatagram(quic: WebTransport) {
@@ -367,7 +406,8 @@ async function receiveDatagram(quic: WebTransport) {
         }
         // value is a Uint8Array.
         let utf8Decode = new TextDecoder;
-        console.log(`Received Datagram ${count}: ${utf8Decode.decode(value)}`);
+        console.log(`Received Datagram ${count}:${utf8Decode.decode(value)}`);
+        // console.log(`Received Datagram ${count}:${value.slice(0,2)}${utf8Decode.decode(value.slice(2))}`);
         count++
     }  
 }

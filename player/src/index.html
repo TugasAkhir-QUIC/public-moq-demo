@@ -1,82 +1,95 @@
 ﻿<script type="module" src="index.ts"></script>
 
-<!doctype html>
+<!DOCTYPE html>
 <html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>WARP</title>
+    <link rel="stylesheet" href="player.css" />
+    <script src="appsettings.js"></script>
+  </head>
 
-<head>
-	<meta charset="UTF-8">
-	<title>WARP</title>
-	<link rel="stylesheet" href="player.css">
-	<script src="appsettings.js"></script>
-</head>
+  <body>
+    <div id="main">
+      <div>
+        <div id="player">
+          <div id="screen">
+            <div id="play"><span>click to play</span></div>
+            <video id="vid" controls></video>
+          </div>
 
-<body>
-	<div id="main">
-		<div>
-			<div id="player">
-				<div id="screen">
-					<div id="play"><span>click to play</span></div>
-					<video id="vid" controls></video>
-				</div>
+          <div id="screen_bottom">
+            <div id="controls">
+              <button type="button" id="start">Start</button>
+              <button type="button" id="live">Go Live</button>
+              <button type="button" id="throttle" style="display: none">
+                Throttle: None
+              </button>
 
-				<div id="screen_bottom">
-					<div id="controls">
-						<button type="button" id="start">Start</button>
-						<button type="button" id="live">Go Live</button>
-						<button type="button" id="throttle" style="display: none">Throttle: None</button>
+              <select id="throttles">
+                <option>Throttle to:</option>
+              </select>
 
-						<select id="throttles">
-							<option>Throttle to:</option>
-						</select>
+              <select id="resolutions">
+                <option>Set resolution to:</option>
+              </select>
+              <button
+                type="button"
+                id="continue_streaming"
+                data-status="streaming"
+              >
+                Pause Streaming
+              </button>
+              <button type="button" id="active_bw_test">Active BW Test</button>
+              <button type="button" id="test_datagram">Test Datagram</button>
+              <button type="button" id="test_stream">Test Stream</button>
+              <button type="button" id="test_datagram2">
+                Test Datagram Video
+              </button>
+              <button type="button" id="test_stream2">Test Stream Video</button>
+            </div>
+            <a
+              href="https://github.com/streaming-university/public-moq-demo"
+              target="_blank"
+            >
+              <img src="assets/github-mark-white.svg" class="github_logo" />
+            </a>
+          </div>
+        </div>
+        <div id="right_col">
+          <div id="stats">
+            <label class="audio label"
+              >Audio Buffer: <span class="seconds"></span
+            ></label>
+            <div class="audio buffer">
+              <div class="fill"></div>
+            </div>
 
-						<select id="resolutions">
-							<option>Set resolution to:</option>
-						</select>
-						<button type="button" id="continue_streaming" data-status="streaming">Pause Streaming</button>
-						<button type="button" id="active_bw_test">Active BW Test</button>
-						<button type="button" id="test_datagram">Test Datagram</button>
-						<button type="button" id="test_stream">Test Stream</button>
-					</div>
-					<a href="https://github.com/streaming-university/public-moq-demo" target="_blank">
-						<img src="assets/github-mark-white.svg" class="github_logo">
-					</a>
-				</div>
+            <label class="video label"
+              >Video Buffer: <span class="seconds"></span
+            ></label>
+            <div class="video buffer">
+              <div class="fill"></div>
+            </div>
 
-			</div>
-			<div id="right_col">
-				<div id="stats">
-					<label class="audio label">Audio Buffer: <span class="seconds"></span></label>
-					<div class="audio buffer">
-						<div class="fill"></div>
-					</div>
-
-					<label class="video label">Video Buffer: <span class="seconds"></span></label>
-					<div class="video buffer">
-						<div class="fill"></div>
-					</div>
-
-					<label>Server Reported Bandwidth</label>
-					<div class="server_bw"></div>
-					<label>SWMA / IFA</label>
-					<div class="swma_threshold"></div>
-					<label>Last Active BW Test</label>
-					<div class="active_bw"></div>
-				</div>
-				<div id="repo_info">
-
-				</div>
-			</div>
-
-		</div>
-		<div>
-			<div id="plot"></div>
-			<a href="javascript: void 0" onclick="" id="toggle_log">Show Logs</a>
-			<div id="log">
-				<h4>Log</h4>
-				<div id="log_content"></div>
-			</div>
-		</div>
-	</div>
-</body>
-
+            <label>Server Reported Bandwidth</label>
+            <div class="server_bw"></div>
+            <label>SWMA / IFA</label>
+            <div class="swma_threshold"></div>
+            <label>Last Active BW Test</label>
+            <div class="active_bw"></div>
+          </div>
+          <div id="repo_info"></div>
+        </div>
+      </div>
+      <div>
+        <div id="plot"></div>
+        <a href="javascript: void 0" onclick="" id="toggle_log">Show Logs</a>
+        <div id="log">
+          <h4>Log</h4>
+          <div id="log_content"></div>
+        </div>
+      </div>
+    </div>
+  </body>
 </html>

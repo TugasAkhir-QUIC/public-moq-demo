@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/TugasAkhir-QUIC/webtransport-go"
+	"github.com/google/uuid"
 	"io"
 	"log"
 	"math"
@@ -58,7 +59,10 @@ func (s *Session) Run(ctx context.Context) (err error) {
 
 	// Once we've validated the session, now we can start accessing the streams
 	//return invoker.Run(ctx, s.runAccept, s.runAcceptUni, s.runInit, s.runAudio, s.runVideo, s.streams.Repeat)
-	return invoker.Run(ctx, s.runAccept, s.runAcceptDatagram, s.runInitDatagram, s.runAudioDatagram, s.runVideoDatagram, s.streams.Repeat)
+	return invoker.Run(ctx, s.runAccept, s.runAcceptUni, s.runInitDatagram, s.runAudioDatagram, s.runVideoDatagram, s.streams.Repeat)
+	//return invoker.Run(ctx, s.runAccept, s.runAcceptDatagram, s.runInit, s.runInitDatagram, s.streams.Repeat)
+	//return invoker.Run(ctx, s.runAccept, s.runAcceptDatagram, s.runVideo, s.streams.Repeat)
+	//return invoker.Run(ctx, s.runAccept, s.runAcceptDatagram, s.runVideoDatagram, s.streams.Repeat)
 }
 
 func (s *Session) runAccept(ctx context.Context) (err error) {
@@ -139,7 +143,7 @@ func (s *Session) handleDatagram(ctx context.Context, datagram []byte) (err erro
 
 		if msg.Ping != nil {
 			println("Ping received")
-			err := s.sendPongDatagram(msg.Ping, ctx) // TODO: ganti ke versi datagram
+			err := s.sendPongDatagram(msg.Ping, ctx)
 			if err != nil {
 				return err
 			}
@@ -212,6 +216,7 @@ func (s *Session) handleStream(ctx context.Context, stream webtransport.ReceiveS
 func (s *Session) runInit(ctx context.Context) (err error) {
 	for _, init := range s.inits {
 		err = s.writeInit(ctx, init)
+		//fmt.Println(i)
 		if err != nil {
 			return fmt.Errorf("failed to write init stream: %w", err)
 		}
@@ -223,6 +228,7 @@ func (s *Session) runInit(ctx context.Context) (err error) {
 func (s *Session) runInitDatagram(ctx context.Context) (err error) {
 	for _, init := range s.inits {
 		err = s.writeInitDatagram(ctx, init)
+		//fmt.Println(i)
 		if err != nil {
 			return fmt.Errorf("failed to write init stream: %w", err)
 		}
@@ -361,7 +367,6 @@ func (s *Session) runVideoDatagram(ctx context.Context) (err error) {
 }
 
 // Create a stream for an INIT segment and write the container.
-// TODO: buat versi datagram
 func (s *Session) writeInit(ctx context.Context, init *MediaInit) (err error) {
 	temp, err := s.inner.OpenUniStreamSync(ctx)
 	if err != nil {
@@ -410,17 +415,10 @@ func (s *Session) writeInitDatagram(ctx context.Context, init *MediaInit) (err e
 
 	//stream.SetPriority(math.MaxInt)
 
-	err = datagram.WriteMessage(Message{
-		Init: &MessageInit{Id: init.ID},
-	})
+	err = datagram.WriteMessage(Message{Init: &MessageInit{Id: init.ID}}, init.Raw)
 
 	if err != nil {
-		return fmt.Errorf("failed to write init header: %w", err)
-	}
-
-	_, err = datagram.Write(init.Raw)
-	if err != nil {
-		return fmt.Errorf("failed to write init data: %w", err)
+		return fmt.Errorf("failed to write init: %w", err)
 	}
 
 	return nil
@@ -430,6 +428,10 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 
 	// Wrap the stream in an object that buffers writes instead of blocking.
 	datagram := NewDatagram(s.inner)
+	id := uuid.New()
+	datagram.ID = id.String()[:8] // TODO: Generate new ID not from segmentID
+	datagram.initID = segment.Init.ID
+	//fmt.Println(datagram.ID, []byte(datagram.ID))
 	s.streams.Add(datagram.Run)
 
 	//defer func() {
@@ -450,6 +452,7 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 
 	init_message := Message{
 		Segment: &MessageSegment{
+			ID:               datagram.ID,
 			Init:             segment.Init.ID,
 			Timestamp:        ms,
 			ETP:              int(s.conn.GetMaxBandwidth() / 1024),
@@ -493,7 +496,7 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 
 	*/
 
-	err = datagram.WriteMessage(init_message)
+	err = datagram.WriteMessage(init_message, nil)
 
 	if err != nil {
 		return fmt.Errorf("failed to write segment header: %w", err)
@@ -507,12 +510,14 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 
 	last_moof_size := 0
 
+	// TODO: add metadata for every datagram sent
 	for {
 		// Get the next fragment
 		start := time.Now().UnixMilli()
 
 		buf, err := segment.Read(ctx)
 		if errors.Is(err, io.EOF) {
+			_, err = datagram.WriteSegment([]byte{}, 1)
 			break
 		} else if err != nil {
 			return fmt.Errorf("failed to read segment data: %w", err)
@@ -532,7 +537,8 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 		}
 
 		// NOTE: This won't block because of our wrapper
-		_, err = datagram.Write(buf)
+		//fmt.Println("aa")
+		_, err = datagram.WriteSegment(buf, 0)
 		if err != nil {
 			return fmt.Errorf("failed to write segment data: %w", err)
 		}
@@ -551,7 +557,6 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 }
 
 // Create a stream for a segment and write the contents, chunk by chunk.
-// TODO: buat versi datagram
 func (s *Session) writeSegment(ctx context.Context, segment *MediaSegment) (err error) {
 	temp, err := s.inner.OpenUniStreamSync(ctx)
 	if err != nil {
@@ -698,7 +703,6 @@ func (s *Session) setPref(msg *MessagePref) {
 	s.prefs[msg.Name] = msg.Value
 }
 
-// TODO: buat versi datagram
 func (s *Session) sendPong(msg *MessagePing, ctx context.Context) (err error) {
 	temp, err := s.inner.OpenUniStreamSync(ctx)
 	if err != nil {
@@ -740,7 +744,7 @@ func (s *Session) sendPongDatagram(msg *MessagePing, ctx context.Context) (err e
 	err = datagram.WriteMessage(
 		Message{
 			Pong: &MessagePong{},
-		})
+		}, nil)
 	if err != nil {
 		return fmt.Errorf("failed to write init header: %w", err)
 	}
