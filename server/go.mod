@@ -4,7 +4,7 @@ go 1.21
 
 require (
 	github.com/TugasAkhir-QUIC/quic-go v0.0.1
-	github.com/TugasAkhir-QUIC/webtransport-go v0.0.4
+	github.com/TugasAkhir-QUIC/webtransport-go v0.0.3
 	github.com/abema/go-mp4 v1.2.0
 	github.com/google/uuid v1.6.0
 	github.com/kixelated/invoker v1.0.2

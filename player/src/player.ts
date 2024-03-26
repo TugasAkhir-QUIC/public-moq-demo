@@ -549,7 +549,7 @@ export class Player {
 		datagram = datagram.slice(1)
 		
 		if (isSegmentData) {
-			// console.log("segment")
+			console.log("segment")
 			const isLastSegment = datagram.at(0)
 			datagram = datagram.slice(1)
 			if (isLastSegment == undefined) {
@@ -890,6 +890,7 @@ export class Player {
 		// console.log(isLastSegment)
 		if (isLastSegment) {
 			segment.finish()
+			this.segmentMap.delete(utf8Decode.decode(id))
 			return
 		}
 

@@ -79,6 +79,7 @@ func (d *Datagram) Run(ctx context.Context) (err error) {
 			if chunkLength%maxSize != 0 {
 				totalFragments += 1
 			}
+			// TODO: make sure totalFragments <  65,535
 			// split chunk
 			for i := 0; i < totalFragments; i++ {
 				start := i * maxSize
@@ -91,11 +92,15 @@ func (d *Datagram) Run(ctx context.Context) (err error) {
 					end = start + maxSize
 				}
 
+				var fragmentNumberBuffer [2]byte
+				var fragmentTotalBuffer [2]byte
+				binary.BigEndian.PutUint16(fragmentNumberBuffer[:], uint16(i))
+				binary.BigEndian.PutUint16(fragmentTotalBuffer[:], uint16(totalFragments))
 				var header []byte
 				header = append(header, fragmented)
 				header = append(header, []byte(id)...)
-				header = append(header, byte(i))
-				header = append(header, byte(totalFragments))
+				header = append(header, fragmentNumberBuffer[:]...)
+				header = append(header, fragmentTotalBuffer[:]...)
 				err = d.inner.SendDatagram(append(header, chunk[start:end]...))
 				if err != nil {
 					fmt.Println(err)

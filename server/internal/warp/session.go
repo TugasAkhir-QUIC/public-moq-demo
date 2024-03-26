@@ -294,6 +294,13 @@ func (s *Session) runAudioDatagram(ctx context.Context) (err error) {
 			return nil
 		}
 
+		//go func() {
+		//	err := s.writeSegmentDatagram(ctx, segment)
+		//	if err != nil {
+		//		fmt.Errorf("failed to write segment stream: %w", err)
+		//	}
+		//}()
+		
 		err = s.writeSegmentDatagram(ctx, segment)
 		if err != nil {
 			return fmt.Errorf("failed to write segment stream: %w", err)
@@ -358,8 +365,14 @@ func (s *Session) runVideoDatagram(ctx context.Context) (err error) {
 			return nil
 		}
 
-		err = s.writeSegmentDatagram(ctx, segment)
+		//go func() {
+		//	err := s.writeSegmentDatagram(ctx, segment)
+		//	if err != nil {
+		//		fmt.Errorf("failed to write segment stream: %w", err)
+		//	}
+		//}()
 
+		err = s.writeSegmentDatagram(ctx, segment)
 		if err != nil {
 			return fmt.Errorf("failed to write segment stream: %w", err)
 		}
