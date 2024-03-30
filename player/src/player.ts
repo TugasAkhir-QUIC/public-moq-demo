@@ -3,7 +3,7 @@ import { StreamReader, StreamWriter } from "./stream"
 import { InitParser } from "./init"
 import { Segment } from "./segment"
 import { Track } from "./track"
-import { Message, MessageInit, MessagePing, MessagePong, MessagePref, MessageSegment } from "./message"
+import { Message, MessageInit, MessagePong, MessagePref, MessageSegment } from "./message"
 import { dbStore } from './db';
 import { FragmentedMessageHandler } from "./fragment"
 
@@ -520,16 +520,12 @@ export class Player {
 		const datagrams = q.datagrams.readable.getReader();
 
 		while (true) {
-			// console.log(counter)
 			++counter;
 			const result = await datagrams.read()
 
 			if (result.done) break
 
-			const datagram = result.value // TODO: problemnya adalah ini Uint8Array bukan StreamReader
-			// console.log(datagram)
-			this.handleDatagram(datagram) // don't await
-			// this.handleStream(new ReadableStream(datagram))
+			this.fragment.handleDatagram(result.value, this)
 		}
 	}
 
@@ -540,7 +536,7 @@ export class Player {
 		// [fragmentedFlag][segmentFlag][lastSegment][ID * 8][initID]//[...]
 		const isFragmented = datagram.at(0)
 		if (isFragmented) {
-			this.fragment.handleDatagram(datagram, start, this)
+			this.fragment.handleDatagram(datagram)
 			return
 		}
 		datagram = datagram.slice(1)
@@ -624,11 +620,12 @@ export class Player {
 
 			const payload = new TextDecoder('utf-8').decode(await r.bytes(size - 8));
 			const msg = JSON.parse(payload) as Message
-			console.log("Msg: " + msg.segment)
 
 			if (msg.init) {
+				console.log("Msg Init: " + msg.init.id)
 				return this.handleInit(r, msg.init)
 			} else if (msg.segment) {
+				console.log("Msg Segment: " + msg.segment.init)
 				return this.handleSegment(r, msg.segment, start)
 			} else if (msg.pong) {
 				return this.handlePong(r, msg.pong)
@@ -739,6 +736,7 @@ export class Player {
 		let lastMoofClockTime = 0;
 
 		// One day I'll figure it out; until then read one top-level atom at a time
+		let count = 1
 		while (true) {
 			if (await stream.done()) {
 				console.log('end of stream')
@@ -749,8 +747,10 @@ export class Player {
 
 			const raw = await stream.peek(4)
 			const size = new DataView(raw.buffer, raw.byteOffset, raw.byteLength).getUint32(0)
+			// console.log(count++, "atom", size)
 			const atom = await stream.bytes(size)
-			console.log("atom:", utf8Decode.decode(atom))
+			console.log(count++, "atom", size)
+			// utf8Decode.decode(atom)
 
 			// boxes: [moof][mdat]...<idle time>...[moof][mdat]
 			// first 4 bytes => size
@@ -792,7 +792,7 @@ export class Player {
 					const stat = [chunkCounter, chunkSize, chunkDownloadDuration, lastMoofDownloadDuration, chunkDownloadDuration > 0 ? (chunkSize * 8 * 1000 / chunkDownloadDuration) : 0, chunkLatency, msg.timestamp];
 					this.chunkStats.push(stat);
 
-					if (chunkCounter === 1) {
+					if (chunkCounter === 1) { // TODO: IFRAME
 						let filteredStats = [stat];
 						const val = this.computeTPut(filteredStats);
 						console.log('ifa calc', val, stat, this.throughputs.get('ifa'));
@@ -820,7 +820,7 @@ export class Player {
 			}
 			totalSegmentSize += size;
 
-			console.log("Atom Length: " + atom.length)
+			// console.log("Atom Length: " + atom.length)
 			segment.push(atom)
 
 			track.flush() // Flushes if the active segment has new samples
@@ -1016,158 +1016,6 @@ export class Player {
 		// 	this.logFunc('segment start (client): ' + new Date(performance.timeOrigin + segmentStartOffset).toISOString());
 		// 	this.logFunc('availability time (server): ' + new Date(msg.at).toISOString());
 		// }
-	}
-
-	async handleSegmentDatagram(datagram: Uint8Array, msg: MessageSegment, segmentStartOffset: number) {
-		let initParser = this.init.get(msg.init);
-		if (!initParser) {
-			initParser = new InitParser()
-			this.init.set(msg.init, initParser)
-		}
-
-		// Wait for the init segment to be fully received and parsed
-		const init = await initParser.ready;
-		//request arrived
-		let track: Track;
-		if (init.info.videoTracks.length) {
-			track = this.video
-		} else {
-			track = this.audio
-		}
-
-		// since streams are multiplexed
-		// a stale segment may come later which changes the latest
-		// etp and tc_rate values inadvertently.
-		if (msg.timestamp >= this.lastSegmentTimestamp) {
-			this.serverBandwidth = msg.etp * 1024; // in bits, comes as Kbps
-			this.tcRate = msg.tc_rate * 1024; // in bits, comes as Kbps
-		}
-		this.lastSegmentTimestamp = msg.timestamp;
-
-		console.log('msg: %o tcRate: %d serverBandwidth: %d', msg, this.tcRate, this.serverBandwidth)
-
-		const segment = new Segment(track.source, init, msg.timestamp)
-		// The track is responsible for flushing the segments in order
-		track.add(segment)
-
-		/* TODO I'm not actually sure why this code doesn't work; something trips up the MP4 parser
-			while (1) {
-				const data = await stream.read()
-				if (!data) break
-
-				segment.push(data)
-				track.flush() // Flushes if the active segment has samples
-			}
-		*/
-
-		let totalSegmentSize = 0;
-		const segmentDownloadStart = performance.now()
-
-		let chunkCounter = 0;
-		let isVideoSegment = init.info.videoTracks.length > 0;
-		let lastMoofSize = 0;
-		let lastMoofStartTime = 0;
-		let lastMoofDownloadDuration = 0;
-		let lastMoofClockTime = 0;
-
-		// One day I'll figure it out; until then read one top-level atom at a time
-		// while (true) {
-		// 	if (await datagram.done()) {
-		// 		console.log('end of stream')
-		// 		break;
-		// 	}
-
-		const boxStartOffset = performance.now();
-
-		const raw = await datagram.slice(0, 4)
-		const size = new DataView(raw.buffer, raw.byteOffset, raw.byteLength).getUint32(0)
-		const atom = await datagram.slice(0, size)
-
-		// boxes: [moof][mdat]...<idle time>...[moof][mdat]
-		// first 4 bytes => size
-		// following 4 bytes => box type
-		const boxType = fromCharCodeUint8([...atom.slice(4, 8)]);
-
-		if (isVideoSegment) {
-			if (boxType === 'moof') {
-				chunkCounter++;
-				lastMoofSize = size;
-				lastMoofStartTime = boxStartOffset;
-				lastMoofDownloadDuration = performance.now() - lastMoofStartTime;
-				lastMoofClockTime = Date.now();
-			} else if (boxType === 'mdat') {
-				const chunkDownloadDuration = performance.now() - lastMoofStartTime;
-				const chunkSize = size + lastMoofSize; // bytes
-				const chunkLatency = Math.round(lastMoofClockTime - msg.at);
-
-				++this.totalChunkCount;
-
-				dbStore.addLogEntry({
-					testId: this.testId,
-					segmentId: msg.init,
-					no: chunkCounter,
-					chunkSize,
-					chunkDownloadDuration,
-					lastMoofDownloadDuration,
-					chunkLatency,
-					msg_timestamp: msg.timestamp,
-					msg_at: msg.at,
-					msg_etp: msg.etp,
-					msg_tc_rate: msg.tc_rate,
-					perf_now: performance.now(),
-					activeBWTestResult: this.activeBWTestResult,
-					lastActiveBWTestResult: this.lastActiveBWTestResult,
-					timestamp: Date.now()
-				});
-
-				const stat = [chunkCounter, chunkSize, chunkDownloadDuration, lastMoofDownloadDuration, chunkDownloadDuration > 0 ? (chunkSize * 8 * 1000 / chunkDownloadDuration) : 0, chunkLatency, msg.timestamp];
-				this.chunkStats.push(stat);
-
-				if (chunkCounter === 1) {
-					let filteredStats = [stat];
-					const val = this.computeTPut(filteredStats);
-					console.log('ifa calc', val, stat, this.throughputs.get('ifa'));
-					// if the value is an outlier (100 times more than the last measurement)
-					// discard it
-					const lastVal = (this.throughputs.get('ifa') || 0);
-					if (lastVal === 0 || val < lastVal * 100) {
-						this.throughputs.set('ifa', val);
-					}
-				}
-
-				if (this.totalChunkCount >= this.getSWMAWindowSize() && this.totalChunkCount % this.getSWMACalculationInterval() === 0) {
-					const stats = this.chunkStats.slice(-this.getSWMAWindowSize());
-					let filteredStats: any[] = this.filterStats(stats, this.getSWMAThreshold(), this.getSWMAThresholdType(), this.throughputs.get('swma') || 0);
-					const tput = this.computeTPut(filteredStats);
-					if (tput > 0) {
-						this.throughputs.set('swma', tput);
-					} else {
-						console.warn('tput is zero.');
-					}
-
-				}
-			}
-		}
-		totalSegmentSize += size;
-
-		console.log("Atom Length: " + atom.length)
-		segment.push(atom)
-
-		track.flush() // Flushes if the active segment has new samples
-		// }
-
-		segment.finish()
-
-		const segmentFinish = performance.now() - segmentDownloadStart;
-
-		if (isVideoSegment) {
-			this.logFunc('-----------------------------------------------------')
-			this.logFunc('segment chunk length: ' + chunkCounter);
-			this.logFunc('segment finish duration: ' + Math.round(segmentFinish));
-			this.logFunc('total segment size: ' + formatBits(totalSegmentSize * 8));
-			this.logFunc('segment start (client): ' + new Date(performance.timeOrigin + segmentStartOffset).toISOString());
-			this.logFunc('availability time (server): ' + new Date(msg.at).toISOString());
-		}
 	}
 
 	logChunkStats = (filteredChunkStats: any[]) => {

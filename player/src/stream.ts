@@ -29,7 +29,7 @@ export class StreamReader {
 		while (this.buffer.byteLength < size) {
 			const result = await this.reader.read()
 			if (result.done) {
-				throw "short buffer"
+				throw "bytes short buffer " + result
 			}
 
 			const buffer = new Uint8Array(result.value)
@@ -54,7 +54,7 @@ export class StreamReader {
 		while (this.buffer.byteLength < size) {
 			const result = await this.reader.read()
 			if (result.done) {
-				throw "short buffer"
+				throw "peek short buffer"
 			}
 
 			const buffer = new Uint8Array(result.value)

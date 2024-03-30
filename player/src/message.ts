@@ -10,7 +10,6 @@ export interface MessageInit {
 }
 
 export interface MessageSegment {
-	id: string
 	init: string // id of the init segment
 	timestamp: number // presentation timestamp in milliseconds of the first sample
 	etp: number // estimated throughput in Kbps / CTA 5006

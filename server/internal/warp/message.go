@@ -14,7 +14,6 @@ type MessageInit struct {
 }
 
 type MessageSegment struct {
-	ID               string  `json:"id"`
 	Init             string  `json:"init"`      // ID of the init segment to use for this segment
 	Timestamp        int     `json:"timestamp"` // PTS of the first frame in milliseconds
 	ETP              int     `json:"etp"`       // Estimated throughput in bytes - CTA 5006
