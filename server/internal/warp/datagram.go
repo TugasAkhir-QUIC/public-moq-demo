@@ -15,7 +15,7 @@ const (
 	maxSize       = 1100 // more than 1300, the client won't pick it up
 )
 
-// Wrapper around quic.SendStream to make Write non-blocking.
+// Wrapper around webtransport.Session to make Write non-blocking.
 // Otherwise we can't write to multiple concurrent streams in the same goroutine.
 type Datagram struct {
 	inner *webtransport.Session
@@ -78,14 +78,13 @@ func (d *Datagram) WriteSegment(buf []byte, id string, number int, lastFragment 
 	n := int(chunkLength / maxSize)
 	if n == 0 {
 		var fragmentNumberBuffer [2]byte
-		//var fragmentTotalBuffer [2]byte
 		binary.BigEndian.PutUint16(fragmentNumberBuffer[:], uint16(number))
-		//binary.BigEndian.PutUint16(fragmentTotalBuffer[:], uint16(totalFragments))
 		var headerF []byte
 		headerF = append(headerF, fragmented)
 		headerF = append(headerF, []byte(id)...)
 		headerF = append(headerF, fragmentNumberBuffer[:]...)
 		headerF = append(headerF, byte(lastFragment))
+
 		_, err = d.Write(append(headerF, buf...))
 		if err != nil {
 			return 0, err
@@ -108,15 +107,13 @@ func (d *Datagram) WriteSegment(buf []byte, id string, number int, lastFragment 
 		}
 
 		var fragmentNumberBuffer [2]byte
-		//var fragmentTotalBuffer [2]byte
 		binary.BigEndian.PutUint16(fragmentNumberBuffer[:], uint16(i+number))
-		//binary.BigEndian.PutUint16(fragmentTotalBuffer[:], uint16(totalFragments))
 		var headerF []byte
 		headerF = append(headerF, fragmented)
 		headerF = append(headerF, []byte(id)...)
 		headerF = append(headerF, fragmentNumberBuffer[:]...)
 		headerF = append(headerF, byte(lastFragment))
-		//headerF = append(headerF, fragmentTotalBuffer[:]...)
+
 		_, err = d.Write(append(headerF, buf[start:end]...))
 		if err != nil {
 			return 0, err

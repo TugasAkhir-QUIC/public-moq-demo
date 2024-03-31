@@ -63,7 +63,6 @@ export class Player {
 	logFunc: Function;
 	testId: string;
 
-	segmentMap: Map<string, Segment>
 	fragment: FragmentedMessageHandler
 
 	constructor(props: any) {
@@ -97,8 +96,6 @@ export class Player {
 		this.init = new Map()
 		this.audio = new Track(new Source(this.mediaSource));
 		this.video = new Track(new Source(this.mediaSource));
-
-		this.segmentMap = new Map()
 
 		this.fragment = new FragmentedMessageHandler();
 
@@ -526,57 +523,6 @@ export class Player {
 		}
 	}
 
-	async handleDatagram(datagram: Uint8Array) {
-		// while (true) {
-		const start = performance.now();
-		// [fragmentId * 8][fragmentNumber][fragmentTotal]
-		// [fragmentedFlag][segmentFlag][lastSegment][ID * 8][initID]//[...]
-		const isFragmented = datagram.at(0)
-		if (isFragmented) {
-			this.fragment.handleDatagram(datagram)
-			return
-		}
-		datagram = datagram.slice(1)
-		
-		const isSegmentData = datagram.at(0)
-		datagram = datagram.slice(1)
-		
-		if (isSegmentData) {
-			console.log("segment")
-			const isLastSegment = datagram.at(0)
-			datagram = datagram.slice(1)
-			if (isLastSegment == undefined) {
-				return
-			}
-			return this.handleSegmentDataDatagram(datagram, Boolean(isLastSegment), start)
-		} 
-		
-		// TODO: kayaknya gini
-		const buf = datagram.slice(0, 4)
-		const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
-		const size = dv.getUint32(0)
-		console.log("Size: " + size)
-
-		const typ = new TextDecoder('utf-8').decode(datagram.slice(4, 8));
-		console.log("Type: " + typ)
-		if (typ !== "warp") throw "expected warp atom"
-		if (size < 8) throw "atom too small"
-
-		const payload = new TextDecoder('utf-8').decode(datagram.slice(8, size));
-		const msg = JSON.parse(payload) as Message
-		console.log("Msg: " + msg.segment?.id)
-
-		// TODO: benerin ini
-		if (msg.init) {
-			return this.handleInitDatagram(datagram.slice(size), msg.init) // TODO: cek bener ga
-		} else if (msg.segment) {
-			return this.handleSegmentInitDatagram(datagram.slice(size), msg.segment, start)
-		} else if (msg.pong) {
-			return this.handlePongDatagram() // TODO: cek bener ga
-		}
-		// }
-	}
-
 	async receiveStreams() {
 		if (!this.quic) {
 			return;
@@ -641,16 +587,6 @@ export class Player {
 		this.pingStartTime = undefined;
 	}
 
-	async handlePongDatagram() {
-		if (!this.pingStartTime) {
-			console.warn('in handlePong | pingStartTime is undefined.');
-			return;
-		}
-		const latency = performance.now() - this.pingStartTime;
-		console.log('Latency is: %d ms', latency);
-		this.pingStartTime = undefined;
-	}
-
 	async handleInit(stream: StreamReader, msg: MessageInit) {
 		let init = this.init.get(msg.id);
 		if (!init) {
@@ -665,18 +601,6 @@ export class Player {
 			console.log(data)
 			init.push(data)
 		}
-	}
-
-	async handleInitDatagram(datagram: Uint8Array, msg: MessageInit) {
-		let init = this.init.get(msg.id);
-		if (!init) {
-			init = new InitParser()
-			this.init.set(msg.id, init)
-		}
-
-		if (!datagram) return
-		// console.log(datagram)
-		init.push(datagram)
 	}
 
 	async handleSegment(stream: StreamReader, msg: MessageSegment, segmentStartOffset: number) {
@@ -798,17 +722,17 @@ export class Player {
 					}
 
 					// TODO: UNCOMMENT LOG
-					// if (this.totalChunkCount >= this.getSWMAWindowSize() && this.totalChunkCount % this.getSWMACalculationInterval() === 0) {
-					// 	const stats = this.chunkStats.slice(-this.getSWMAWindowSize());
-					// 	let filteredStats: any[] = this.filterStats(stats, this.getSWMAThreshold(), this.getSWMAThresholdType(), this.throughputs.get('swma') || 0);
-					// 	const tput = this.computeTPut(filteredStats);
-					// 	if (tput > 0) {
-					// 		this.throughputs.set('swma', tput);
-					// 	} else {
-					// 		console.warn('tput is zero.');
-					// 	}
+					if (this.totalChunkCount >= this.getSWMAWindowSize() && this.totalChunkCount % this.getSWMACalculationInterval() === 0) {
+						const stats = this.chunkStats.slice(-this.getSWMAWindowSize());
+						let filteredStats: any[] = this.filterStats(stats, this.getSWMAThreshold(), this.getSWMAThresholdType(), this.throughputs.get('swma') || 0);
+						const tput = this.computeTPut(filteredStats);
+						if (tput > 0) {
+							this.throughputs.set('swma', tput);
+						} else {
+							console.warn('tput is zero.');
+						}
 
-					// }
+					}
 				}
 			}
 			totalSegmentSize += size;
@@ -830,184 +754,6 @@ export class Player {
 			this.logFunc('segment start (client): ' + new Date(performance.timeOrigin + segmentStartOffset).toISOString());
 			this.logFunc('availability time (server): ' + new Date(msg.at).toISOString());
 		}
-	}
-
-	async handleSegmentInitDatagram(datagram: Uint8Array, msg: MessageSegment, segmentStartOffset: number) {
-		let initParser = this.init.get(msg.init);
-		if (!initParser) {
-			initParser = new InitParser()
-			this.init.set(msg.init, initParser)
-		}
-
-		// Wait for the init segment to be fully received and parsed
-		const init = await initParser.ready;
-		//request arrived
-		let track: Track;
-		if (init.info.videoTracks.length) {
-			track = this.video
-		} else {
-			track = this.audio
-		}
-
-		// since streams are multiplexed
-		// a stale segment may come later which changes the latest
-		// etp and tc_rate values inadvertently.
-		if (msg.timestamp >= this.lastSegmentTimestamp) {
-			this.serverBandwidth = msg.etp * 1024; // in bits, comes as Kbps
-			this.tcRate = msg.tc_rate * 1024; // in bits, comes as Kbps
-		}
-		this.lastSegmentTimestamp = msg.timestamp;
-
-		console.log('msg: %o tcRate: %d serverBandwidth: %d', msg, this.tcRate, this.serverBandwidth)
-
-		const segment = new Segment(track.source, init, msg.timestamp)
-		// The track is responsible for flushing the segments in order
-		track.add(segment)
-
-		console.log("ID:", msg.id)
-
-		this.segmentMap.set(msg.id, segment)
-	}
-
-	async handleSegmentDataDatagram(datagram: Uint8Array, isLastSegment: boolean, segmentStartOffset: number) {
-		let utf8Decode = new TextDecoder;
-		const id = datagram.slice(0, 8)
-		datagram = datagram.slice(8)
-		const segment = this.segmentMap.get(utf8Decode.decode(id))
-		if (!segment) {
-			console.log("segment not found id:", utf8Decode.decode(id))
-			return
-		}
-
-		// console.log(isLastSegment)
-		if (isLastSegment) {
-			segment.finish()
-			this.segmentMap.delete(utf8Decode.decode(id))
-			return
-		}
-
-		const initID = utf8Decode.decode(datagram.slice(0,1))
-		datagram = datagram.slice(1)
-		if (initID == undefined) {
-			console.log("undefined")
-			return
-		}
-		// console.log("initID: ", initID)
-
-		let initParser = this.init.get(initID.toString());
-		if (!initParser) {
-			initParser = new InitParser()
-			this.init.set(initID.toString(), initParser)
-		}
-
-		// Wait for the init segment to be fully received and parsed
-		const init = await initParser.ready;
-
-		let track: Track;
-		if (init.info.videoTracks.length) {
-			track = this.video
-		} else {
-			track = this.audio
-		}
-
-		// let totalSegmentSize = 0;
-		// const segmentDownloadStart = performance.now()
-
-		// let chunkCounter = 0;
-		// let isVideoSegment = init.info.videoTracks.length > 0;
-		// let lastMoofSize = 0;
-		// let lastMoofStartTime = 0;
-		// let lastMoofDownloadDuration = 0;
-		// let lastMoofClockTime = 0;
-
-		// const boxStartOffset = performance.now();
-
-		const raw = await datagram.slice(0, 4)
-		const size = new DataView(raw.buffer, raw.byteOffset, raw.byteLength).getUint32(0)
-		// console.log("size:", size)
-		const atom = await datagram.slice(0, size) //TODO: (0, size) / (4, size)
-		// console.log("atom:", utf8Decode.decode(atom))
-
-		// const boxType = fromCharCodeUint8([...atom.slice(4, 8)]);
-
-		// if (isVideoSegment) {
-		// 	if (boxType === 'moof') {
-		// 		chunkCounter++;
-		// 		lastMoofSize = size;
-		// 		lastMoofStartTime = boxStartOffset;
-		// 		lastMoofDownloadDuration = performance.now() - lastMoofStartTime;
-		// 		lastMoofClockTime = Date.now();
-		// 	} else if (boxType === 'mdat') {
-		// 		const chunkDownloadDuration = performance.now() - lastMoofStartTime;
-		// 		const chunkSize = size + lastMoofSize; // bytes
-		// 		const chunkLatency = Math.round(lastMoofClockTime - msg.at);
-
-		// 		++this.totalChunkCount;
-
-		// 		dbStore.addLogEntry({
-		// 			testId: this.testId,
-		// 			segmentId: msg.init,
-		// 			no: chunkCounter,
-		// 			chunkSize,
-		// 			chunkDownloadDuration,
-		// 			lastMoofDownloadDuration,
-		// 			chunkLatency,
-		// 			msg_timestamp: msg.timestamp,
-		// 			msg_at: msg.at,
-		// 			msg_etp: msg.etp,
-		// 			msg_tc_rate: msg.tc_rate,
-		// 			perf_now: performance.now(),
-		// 			activeBWTestResult: this.activeBWTestResult,
-		// 			lastActiveBWTestResult: this.lastActiveBWTestResult,
-		// 			timestamp: Date.now()
-		// 		});
-
-		// 		const stat = [chunkCounter, chunkSize, chunkDownloadDuration, lastMoofDownloadDuration, chunkDownloadDuration > 0 ? (chunkSize * 8 * 1000 / chunkDownloadDuration) : 0, chunkLatency, msg.timestamp];
-		// 		this.chunkStats.push(stat);
-
-		// 		if (chunkCounter === 1) {
-		// 			let filteredStats = [stat];
-		// 			const val = this.computeTPut(filteredStats);
-		// 			console.log('ifa calc', val, stat, this.throughputs.get('ifa'));
-		// 			// if the value is an outlier (100 times more than the last measurement)
-		// 			// discard it
-		// 			const lastVal = (this.throughputs.get('ifa') || 0);
-		// 			if (lastVal === 0 || val < lastVal * 100) {
-		// 				this.throughputs.set('ifa', val);
-		// 			}
-		// 		}
-
-		// 		if (this.totalChunkCount >= this.getSWMAWindowSize() && this.totalChunkCount % this.getSWMACalculationInterval() === 0) {
-		// 			const stats = this.chunkStats.slice(-this.getSWMAWindowSize());
-		// 			let filteredStats: any[] = this.filterStats(stats, this.getSWMAThreshold(), this.getSWMAThresholdType(), this.throughputs.get('swma') || 0);
-		// 			const tput = this.computeTPut(filteredStats);
-		// 			if (tput > 0) {
-		// 				this.throughputs.set('swma', tput);
-		// 			} else {
-		// 				console.warn('tput is zero.');
-		// 			}
-
-		// 		}
-		// 	}
-		// }
-		// totalSegmentSize += size;
-
-		// console.log("Atom Length: " + atom.length)
-		segment.push(atom)
-
-		track.flush() // Flushes if the active segment has new samples
-		
-
-		// const segmentFinish = performance.now() - segmentDownloadStart;
-
-		// if (isVideoSegment) {
-		// 	this.logFunc('-----------------------------------------------------')
-		// 	this.logFunc('segment chunk length: ' + chunkCounter);
-		// 	this.logFunc('segment finish duration: ' + Math.round(segmentFinish));
-		// 	this.logFunc('total segment size: ' + formatBits(totalSegmentSize * 8));
-		// 	this.logFunc('segment start (client): ' + new Date(performance.timeOrigin + segmentStartOffset).toISOString());
-		// 	this.logFunc('availability time (server): ' + new Date(msg.at).toISOString());
-		// }
 	}
 
 	logChunkStats = (filteredChunkStats: any[]) => {
@@ -1033,7 +779,7 @@ export class Player {
 	filterStats = (chunkStats: any[], threshold: number, thresholdType: string, lastTPut?: number) => {
 		let filteredStats = chunkStats.slice();
 		// TODO: UNCOMMENT LOG
-		// console.log('computeTPut | chunk count: %d thresholdType: %s threshold: %d', filteredStats.length, thresholdType, threshold);
+		console.log('computeTPut | chunk count: %d thresholdType: %s threshold: %d', filteredStats.length, thresholdType, threshold);
 
 		let zeroDurations = filteredStats.filter(a => a[2] === 0);
 		filteredStats = filteredStats.filter(a => a[2] > 0);
@@ -1058,7 +804,7 @@ export class Player {
 		filteredStats = filteredStats.concat(zeroDurations);
 
 		// TODO: UNCOMMENT LOG
-		// console.log('computeTPut | after filtering: chunk count: %d', filteredStats.length);
+		console.log('computeTPut | after filtering: chunk count: %d', filteredStats.length);
 		return filteredStats;
 	}
 

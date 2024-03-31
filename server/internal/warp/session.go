@@ -60,9 +60,6 @@ func (s *Session) Run(ctx context.Context) (err error) {
 	// Once we've validated the session, now we can start accessing the streams
 	//return invoker.Run(ctx, s.runAccept, s.runAcceptUni, s.runInit, s.runAudio, s.runVideo, s.streams.Repeat)
 	return invoker.Run(ctx, s.runAccept, s.runAcceptUni, s.runInitDatagram, s.runAudioDatagram, s.runVideoDatagram, s.streams.Repeat)
-	//return invoker.Run(ctx, s.runAccept, s.runAcceptDatagram, s.runInit, s.runInitDatagram, s.streams.Repeat)
-	//return invoker.Run(ctx, s.runAccept, s.runAcceptDatagram, s.runVideo, s.streams.Repeat)
-	//return invoker.Run(ctx, s.runAccept, s.runAcceptDatagram, s.runVideoDatagram, s.streams.Repeat)
 }
 
 func (s *Session) runAccept(ctx context.Context) (err error) {
@@ -88,66 +85,6 @@ func (s *Session) runAcceptUni(ctx context.Context) (err error) {
 		s.streams.Add(func(ctx context.Context) (err error) {
 			return s.handleStream(ctx, stream)
 		})
-	}
-}
-
-func (s *Session) runAcceptDatagram(ctx context.Context) (err error) {
-	for {
-		datagram, err := s.inner.ReceiveDatagram(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to accept unidirectional stream: %w", err)
-		}
-
-		s.streams.Add(func(ctx context.Context) (err error) {
-			return s.handleDatagram(ctx, datagram)
-		})
-	}
-}
-
-func (s *Session) handleDatagram(ctx context.Context, datagram []byte) (err error) {
-	var header [8]byte
-	for {
-		header = [8]byte(datagram[:8])
-
-		size := binary.BigEndian.Uint32(header[0:4])
-		name := string(header[4:8])
-
-		if size < 8 {
-			return fmt.Errorf("atom size is too small")
-		} else if size > 42069 { // arbitrary limit
-			return fmt.Errorf("atom size is too large")
-		} else if name != "warp" {
-			return fmt.Errorf("only warp atoms are supported")
-		}
-
-		payload := make([]byte, size-8)
-		payload = datagram[:size-8]
-
-		log.Println("received message:", string(payload))
-
-		msg := Message{}
-
-		err = json.Unmarshal(payload, &msg)
-		if err != nil {
-			return fmt.Errorf("failed to decode json payload: %w", err)
-		}
-
-		if msg.Debug != nil {
-			s.setDebug(msg.Debug)
-		}
-
-		if msg.Pref != nil {
-			fmt.Printf("* Pref received name: %s value: %s\n", msg.Pref.Name, msg.Pref.Value)
-			s.setPref(msg.Pref)
-		}
-
-		if msg.Ping != nil {
-			println("Ping received")
-			err := s.sendPongDatagram(msg.Ping, ctx)
-			if err != nil {
-				return err
-			}
-		}
 	}
 }
 
@@ -216,7 +153,6 @@ func (s *Session) handleStream(ctx context.Context, stream webtransport.ReceiveS
 func (s *Session) runInit(ctx context.Context) (err error) {
 	for _, init := range s.inits {
 		err = s.writeInit(ctx, init)
-		//fmt.Println(i)
 		if err != nil {
 			return fmt.Errorf("failed to write init stream: %w", err)
 		}
@@ -228,7 +164,6 @@ func (s *Session) runInit(ctx context.Context) (err error) {
 func (s *Session) runInitDatagram(ctx context.Context) (err error) {
 	for _, init := range s.inits {
 		err = s.writeInitDatagram(ctx, init)
-		//fmt.Println(i)
 		if err != nil {
 			return fmt.Errorf("failed to write init stream: %w", err)
 		}
@@ -294,13 +229,6 @@ func (s *Session) runAudioDatagram(ctx context.Context) (err error) {
 			return nil
 		}
 
-		//go func() {
-		//	err := s.writeSegmentDatagram(ctx, segment)
-		//	if err != nil {
-		//		fmt.Errorf("failed to write segment stream: %w", err)
-		//	}
-		//}()
-
 		err = s.writeSegmentDatagram(ctx, segment)
 		if err != nil {
 			return fmt.Errorf("failed to write segment stream: %w", err)
@@ -364,13 +292,6 @@ func (s *Session) runVideoDatagram(ctx context.Context) (err error) {
 		if segment == nil {
 			return nil
 		}
-
-		//go func() {
-		//	err := s.writeSegmentDatagram(ctx, segment)
-		//	if err != nil {
-		//		fmt.Errorf("failed to write segment stream: %w", err)
-		//	}
-		//}()
 
 		err = s.writeSegmentDatagram(ctx, segment)
 		if err != nil {
@@ -547,8 +468,7 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 				fmt.Printf("* chunk: %d size: %d time offset: %d\n", chunk_count, chunk_size, time.Now().UnixMilli()-start)
 			}
 		}
-		//fmt.Println(len(buf))
-		//msgByte = append(msgByte, buf...)
+
 		n, err := datagram.WriteSegment(buf, id, number, 0)
 		if err != nil {
 			return fmt.Errorf("failed to write segment data: %w", err)
@@ -734,28 +654,6 @@ func (s *Session) sendPong(msg *MessagePing, ctx context.Context) (err error) {
 		Message{
 			Pong: &MessagePong{},
 		})
-	if err != nil {
-		return fmt.Errorf("failed to write init header: %w", err)
-	}
-	return nil
-}
-
-func (s *Session) sendPongDatagram(msg *MessagePing, ctx context.Context) (err error) {
-
-	// Wrap the stream in an object that buffers writes instead of blocking.
-	datagram := NewDatagram(s.inner)
-	s.streams.Add(datagram.Run)
-
-	//defer func() {
-	//	if err != nil {
-	//		stream.WriteCancel(1)
-	//	}
-	//}()
-
-	err = datagram.WriteMessage(
-		Message{
-			Pong: &MessagePong{},
-		}, nil)
 	if err != nil {
 		return fmt.Errorf("failed to write init header: %w", err)
 	}
