@@ -3,8 +3,9 @@ import { StreamReader, StreamWriter } from "./stream"
 import { InitParser } from "./init"
 import { Segment } from "./segment"
 import { Track } from "./track"
-import { Message, MessageInit, MessagePing, MessagePong, MessagePref, MessageSegment } from "./message"
+import { Message, MessageInit, MessagePong, MessagePref, MessageSegment } from "./message"
 import { dbStore } from './db';
+import { FragmentedMessageHandler } from "./fragment"
 
 ///<reference path="./types/webtransport.d.ts"/>
 
@@ -62,6 +63,8 @@ export class Player {
 	logFunc: Function;
 	testId: string;
 
+	fragment: FragmentedMessageHandler
+
 	constructor(props: any) {
 		this.vidRef = props.vid
 		this.statsRef = props.stats
@@ -93,6 +96,8 @@ export class Player {
 		this.init = new Map()
 		this.audio = new Track(new Source(this.mediaSource));
 		this.video = new Track(new Source(this.mediaSource));
+
+		this.fragment = new FragmentedMessageHandler();
 
 		if (props.autoStart) {
 			this.start();
@@ -149,7 +154,8 @@ export class Player {
 		})
 
 		// async functions
-		this.receiveStreams()
+		// this.receiveStreams()
+		this.receiveDatagrams()
 
 		if (this.activeBWTestInterval > 0) {
 			setTimeout(() => {
@@ -497,6 +503,26 @@ export class Player {
 		this.video.advance(playhead)
 	}
 
+	async receiveDatagrams() {
+		if (!this.quic) {
+			return;
+		}
+
+		let counter = 0;
+		const q = await this.quic
+
+		const datagrams = q.datagrams.readable.getReader();
+
+		while (true) {
+			++counter;
+			const result = await datagrams.read()
+
+			if (result.done) break
+
+			this.fragment.handleDatagram(result.value, this)
+		}
+	}
+
 	async receiveStreams() {
 		if (!this.quic) {
 			return;
@@ -514,6 +540,7 @@ export class Player {
 			if (result.done) break
 
 			const stream = result.value
+			console.log(stream)
 			this.handleStream(stream) // don't await
 		}
 	}
@@ -528,7 +555,9 @@ export class Player {
 			}
 
 			const size = await r.uint32();
+			console.log("Size: " + size)
 			const typ = new TextDecoder('utf-8').decode(await r.bytes(4));
+			console.log("Type: " + typ)
 			if (typ !== "warp") throw "expected warp atom"
 			if (size < 8) throw "atom too small"
 
@@ -536,8 +565,10 @@ export class Player {
 			const msg = JSON.parse(payload) as Message
 
 			if (msg.init) {
+				console.log("Msg Init: " + msg.init.id)
 				return this.handleInit(r, msg.init)
 			} else if (msg.segment) {
+				console.log("Msg Segment: " + msg.segment.init)
 				return this.handleSegment(r, msg.segment, start)
 			} else if (msg.pong) {
 				return this.handlePong(r, msg.pong)
@@ -567,6 +598,7 @@ export class Player {
 			const data = await stream.read()
 			//request arrived
 			if (!data) break
+			console.log(data)
 			init.push(data)
 		}
 	}
@@ -624,6 +656,7 @@ export class Player {
 		let lastMoofClockTime = 0;
 
 		// One day I'll figure it out; until then read one top-level atom at a time
+		let count = 1
 		while (true) {
 			if (await stream.done()) {
 				console.log('end of stream')
@@ -676,7 +709,7 @@ export class Player {
 					const stat = [chunkCounter, chunkSize, chunkDownloadDuration, lastMoofDownloadDuration, chunkDownloadDuration > 0 ? (chunkSize * 8 * 1000 / chunkDownloadDuration) : 0, chunkLatency, msg.timestamp];
 					this.chunkStats.push(stat);
 
-					if (chunkCounter === 1) {
+					if (chunkCounter === 1) { // TODO: IFRAME
 						let filteredStats = [stat];
 						const val = this.computeTPut(filteredStats);
 						console.log('ifa calc', val, stat, this.throughputs.get('ifa'));
@@ -688,6 +721,7 @@ export class Player {
 						}
 					}
 
+					// TODO: UNCOMMENT LOG
 					if (this.totalChunkCount >= this.getSWMAWindowSize() && this.totalChunkCount % this.getSWMACalculationInterval() === 0) {
 						const stats = this.chunkStats.slice(-this.getSWMAWindowSize());
 						let filteredStats: any[] = this.filterStats(stats, this.getSWMAThreshold(), this.getSWMAThresholdType(), this.throughputs.get('swma') || 0);
@@ -697,7 +731,7 @@ export class Player {
 						} else {
 							console.warn('tput is zero.');
 						}
-						
+
 					}
 				}
 			}
@@ -744,6 +778,7 @@ export class Player {
 
 	filterStats = (chunkStats: any[], threshold: number, thresholdType: string, lastTPut?: number) => {
 		let filteredStats = chunkStats.slice();
+		// TODO: UNCOMMENT LOG
 		console.log('computeTPut | chunk count: %d thresholdType: %s threshold: %d', filteredStats.length, thresholdType, threshold);
 
 		let zeroDurations = filteredStats.filter(a => a[2] === 0);
@@ -768,6 +803,7 @@ export class Player {
 
 		filteredStats = filteredStats.concat(zeroDurations);
 
+		// TODO: UNCOMMENT LOG
 		console.log('computeTPut | after filtering: chunk count: %d', filteredStats.length);
 		return filteredStats;
 	}

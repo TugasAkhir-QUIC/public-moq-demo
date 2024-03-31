@@ -109,6 +109,89 @@ func NewServer(config ServerConfig, media *Media) (s *Server, err error) {
 		}
 	})
 
+	//mux.HandleFunc("/test-datagram", func(w http.ResponseWriter, r *http.Request) {
+	//	sess, err := s.inner.Upgrade(w, r)
+	//	if err != nil {
+	//		http.Error(w, "failed to upgrade session", 500)
+	//		return
+	//	}
+	//
+	//	count := 1
+	//	for {
+	//		msg, err := sess.ReceiveDatagram(r.Context())
+	//		if err != nil {
+	//			fmt.Println("SessionDatagram closed, ending datagram listener:", err)
+	//			break
+	//		}
+	//		fmt.Printf("Received datagram %d: %s\n", count, msg)
+	//
+	//		sendMsg := bytes.ToUpper(msg)
+	//		fmt.Printf("Sending datagram %d: %s\n", count, sendMsg)
+	//		err = sess.SendDatagram(sendMsg)
+	//		if err != nil {
+	//			fmt.Println("Error when Sending Datagram, Error: ", err)
+	//			return
+	//		}
+	//		count++
+	//	}
+	//})
+	//
+	//mux.HandleFunc("/test-datagram-2", func(w http.ResponseWriter, r *http.Request) {
+	//	sess, err := s.inner.Upgrade(w, r)
+	//	if err != nil {
+	//		http.Error(w, "failed to upgrade session", 500)
+	//		return
+	//	}
+	//
+	//	count := 1
+	//	msg, err := sess.ReceiveDatagram(r.Context())
+	//	if err != nil {
+	//		fmt.Println("SessionDatagram closed, ending datagram listener:", err)
+	//	}
+	//	fmt.Printf("Received datagram %d: %s\n", count, msg)
+	//	for {
+	//		fmt.Printf("Sending datagram %d: %s\n", count, msg)
+	//		err = sess.SendDatagram(msg)
+	//		if err != nil {
+	//			fmt.Println("Error when Sending Datagram, Error: ", err)
+	//			return
+	//		}
+	//		count++
+	//	}
+	//})
+	//
+	//mux.HandleFunc("/test-stream", func(w http.ResponseWriter, r *http.Request) {
+	//	sess, err := s.inner.Upgrade(w, r)
+	//	if err != nil {
+	//		http.Error(w, "failed to upgrade session", 500)
+	//		return
+	//	}
+	//	stream, err := sess.AcceptStream(r.Context())
+	//	if err != nil {
+	//		fmt.Println("SessionDatagram closed, ending stream listener:", err)
+	//	}
+	//	count := 1
+	//	for {
+	//		buf := make([]byte, 3)
+	//		n, err2 := stream.Read(buf)
+	//		if err2 != nil {
+	//			fmt.Println("Nothing to read, Error: ", err)
+	//			return
+	//		}
+	//		msg := buf[:n]
+	//		fmt.Printf("Received stream %d: %s\n", count, msg)
+	//
+	//		sendMsg := bytes.ToUpper(msg)
+	//		fmt.Printf("Sending stream %d: %s\n", count, sendMsg)
+	//		_, err3 := stream.Write(sendMsg)
+	//		if err3 != nil {
+	//			fmt.Println("Error when Sending Stream, Error: ", err)
+	//			return
+	//		}
+	//		count++
+	//	}
+	//})
+
 	return s, nil
 }
 

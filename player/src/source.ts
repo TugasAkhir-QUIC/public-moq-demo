@@ -133,7 +133,7 @@ export class Source {
 							this.sourceBuffer.remove(start, end)
 						}
 					} catch (e) {
-						console.warn('error in trimming sourceBuffer')
+						console.warn('error in trimming sourceBuffer', e)
 					}
 					break;
 				default:

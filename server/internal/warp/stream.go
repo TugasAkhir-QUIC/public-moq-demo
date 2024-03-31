@@ -47,6 +47,9 @@ func (s *Stream) Run(ctx context.Context) (err error) {
 		s.chunks = s.chunks[len(s.chunks):]
 		s.mutex.Unlock()
 
+		//if len(chunks) != 0 {
+		//	fmt.Println(len(chunks))
+		//}
 		for _, chunk := range chunks {
 			_, err = s.inner.Write(chunk)
 			if err != nil {
