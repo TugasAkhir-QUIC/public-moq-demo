@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/TugasAkhir-QUIC/webtransport-go"
-	"github.com/google/uuid"
 	"sync"
 )
 
@@ -27,8 +26,6 @@ type Datagram struct {
 
 	notify chan struct{}
 	mutex  sync.Mutex
-
-	init string
 }
 
 func NewDatagram(inner *webtransport.Session) (d *Datagram) {
@@ -56,17 +53,10 @@ func (d *Datagram) Run(ctx context.Context) (err error) {
 		d.mutex.Unlock()
 
 		for _, chunk := range chunks {
-			fmt.Println(d.init)
 			err = d.inner.SendDatagram(chunk)
 			if err != nil {
 				return err
 			}
-			//if d.init == "0" || d.init == "1" || d.init == "2" || d.init == "3" {
-			//	err := invoker.Sleep(20 * time.Millisecond)(ctx)
-			//	if err != nil {
-			//		return fmt.Errorf("failed in runAudio: %w", err)
-			//	}
-			//}
 		}
 
 		//if closed {
@@ -78,23 +68,30 @@ func (d *Datagram) Run(ctx context.Context) (err error) {
 			case <-ctx.Done():
 				return ctx.Err()
 			case <-notify:
-				fmt.Println("notified")
 			}
 		}
 	}
 }
 
-func (d *Datagram) WriteSegment(ctx context.Context, buf []byte) (m int, err error) {
+func (d *Datagram) WriteSegment(buf []byte, id string, number int, lastFragment int) (numberOffset int, err error) {
 	chunkLength := int64(len(buf))
 	n := int(chunkLength / maxSize)
 	if n == 0 {
-		_, err = d.Write(append([]byte{notFragmented}, buf...))
+		var fragmentNumberBuffer [2]byte
+		//var fragmentTotalBuffer [2]byte
+		binary.BigEndian.PutUint16(fragmentNumberBuffer[:], uint16(number))
+		//binary.BigEndian.PutUint16(fragmentTotalBuffer[:], uint16(totalFragments))
+		var headerF []byte
+		headerF = append(headerF, fragmented)
+		headerF = append(headerF, []byte(id)...)
+		headerF = append(headerF, fragmentNumberBuffer[:]...)
+		headerF = append(headerF, byte(lastFragment))
+		_, err = d.Write(append(headerF, buf...))
 		if err != nil {
 			return 0, err
 		}
-		return len(buf), nil
+		return 1, nil
 	}
-	id := uuid.New().String()[:8]
 	totalFragments := n
 	if chunkLength%maxSize != 0 {
 		totalFragments += 1
@@ -111,27 +108,22 @@ func (d *Datagram) WriteSegment(ctx context.Context, buf []byte) (m int, err err
 		}
 
 		var fragmentNumberBuffer [2]byte
-		var fragmentTotalBuffer [2]byte
-		binary.BigEndian.PutUint16(fragmentNumberBuffer[:], uint16(i))
-		binary.BigEndian.PutUint16(fragmentTotalBuffer[:], uint16(totalFragments))
+		//var fragmentTotalBuffer [2]byte
+		binary.BigEndian.PutUint16(fragmentNumberBuffer[:], uint16(i+number))
+		//binary.BigEndian.PutUint16(fragmentTotalBuffer[:], uint16(totalFragments))
 		var headerF []byte
 		headerF = append(headerF, fragmented)
 		headerF = append(headerF, []byte(id)...)
 		headerF = append(headerF, fragmentNumberBuffer[:]...)
-		headerF = append(headerF, fragmentTotalBuffer[:]...)
+		headerF = append(headerF, byte(lastFragment))
+		//headerF = append(headerF, fragmentTotalBuffer[:]...)
 		_, err = d.Write(append(headerF, buf[start:end]...))
-		//if d.init != "4" && i%2 == 0 {
-		//	err := invoker.Sleep(50 * time.Millisecond)(ctx)
-		//	if err != nil {
-		//		return 0, fmt.Errorf("failed in runAudio: %w", err)
-		//	}
-		//}
 		if err != nil {
 			return 0, err
 		}
 	}
 
-	return len(buf), nil
+	return totalFragments, nil
 }
 
 func (d *Datagram) Write(buf []byte) (n int, err error) {

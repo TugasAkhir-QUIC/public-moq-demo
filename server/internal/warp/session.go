@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/TugasAkhir-QUIC/webtransport-go"
+	"github.com/google/uuid"
 	"io"
 	"log"
 	"math"
@@ -314,7 +315,7 @@ func (s *Session) runVideo(ctx context.Context) (err error) {
 			// Sleep to let cpu off
 			err := invoker.Sleep(10 * time.Millisecond)(ctx)
 			if err != nil {
-				return fmt.Errorf("failed in runAudio: %w", err)
+				return fmt.Errorf("failed in runVideo: %w", err)
 			}
 			s.videoTimeOffset += time.Since(start)
 			continue
@@ -346,7 +347,7 @@ func (s *Session) runVideoDatagram(ctx context.Context) (err error) {
 			// Sleep to let cpu off
 			err := invoker.Sleep(10 * time.Millisecond)(ctx)
 			if err != nil {
-				return fmt.Errorf("failed in runAudio: %w", err)
+				return fmt.Errorf("failed in runVideo: %w", err)
 			}
 			s.videoTimeOffset += time.Since(start)
 			continue
@@ -440,7 +441,6 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 
 	// Wrap the stream in an object that buffers writes instead of blocking.
 	datagram := NewDatagram(s.inner)
-	datagram.init = segment.Init.ID
 	s.streams.Add(datagram.Run)
 
 	//defer func() {
@@ -517,14 +517,19 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 
 	last_moof_size := 0
 
-	// TODO: add metadata for every datagram sent
+	id := uuid.New().String()[:8]
+
+	number, err := datagram.WriteSegment(msgByte, id, 0, 0)
+	if err != nil {
+		return fmt.Errorf("failed to write segment data: %w", err)
+	}
 	for {
 		// Get the next fragment
 		start := time.Now().UnixMilli()
 
 		buf, err := segment.Read(ctx)
 		if errors.Is(err, io.EOF) {
-			//_, err = datagram.WriteSegment([]byte{}, 1)
+			_, err = datagram.WriteSegment([]byte{}, id, number, 1)
 			break
 		} else if err != nil {
 			return fmt.Errorf("failed to read segment data: %w", err)
@@ -543,12 +548,12 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 			}
 		}
 		//fmt.Println(len(buf))
-		msgByte = append(msgByte, buf...)
-
-	}
-	_, err = datagram.WriteSegment(ctx, msgByte)
-	if err != nil {
-		return fmt.Errorf("failed to write segment data: %w", err)
+		//msgByte = append(msgByte, buf...)
+		n, err := datagram.WriteSegment(buf, id, number, 0)
+		if err != nil {
+			return fmt.Errorf("failed to write segment data: %w", err)
+		}
+		number += n
 	}
 
 	// for debug purposes
@@ -571,7 +576,6 @@ func (s *Session) writeSegment(ctx context.Context, segment *MediaSegment) (err 
 
 	// Wrap the stream in an object that buffers writes instead of blocking.
 	stream := NewStream(temp)
-	stream.init = segment.Init.ID
 	s.streams.Add(stream.Run)
 
 	defer func() {

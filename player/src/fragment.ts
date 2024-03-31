@@ -4,7 +4,7 @@ type MessageFragment = {
     fragmentedFlag: number;
     fragmentId: string;
     fragmentNumber: number;
-    fragmentTotal: number;
+    isLastFragment: boolean
     data: Uint8Array;
 };
 
@@ -21,18 +21,17 @@ export class FragmentedMessageHandler {
   
     handleDatagram(datagram: Uint8Array, player: Player) {
         if (!datagram.at(0)) {
-            console.log("not fragmented");
             const stream = new ReadableStream({
                 start(controller) {
-                controller.enqueue(datagram.slice(1)); // Enqueue the sliced data
-                controller.close(); // Close the stream
+                controller.enqueue(datagram.slice(1));
+                controller.close();
                 }
             });
             player.handleStream(stream)
         }
-        console.log("fragmented")
         const fragment = this.parseDatagram(datagram);
-  
+        // console.log(fragment)
+
         if (!this.streamControllers.has(fragment.fragmentId)) {
             const stream = new ReadableStream<Uint8Array>({
                 start: (controller) => {
@@ -59,11 +58,11 @@ export class FragmentedMessageHandler {
         const buffers = this.fragmentBuffers.get(fragment.fragmentId);
         if (buffers) {
             buffers.set(fragment.fragmentNumber, fragment.data);
-            this.processFragments(fragment.fragmentId, fragment.fragmentTotal);
+            this.processFragments(fragment.fragmentId, fragment.isLastFragment);
         }   
     }
   
-    private processFragments(fragmentId: string, fragmentTotal: number) {
+    private processFragments(fragmentId: string, isLastFragment: boolean) {
       const buffers = this.fragmentBuffers.get(fragmentId);
       const controller = this.streamControllers.get(fragmentId);
       let nextFragmentNumber = this.nextFragmentNumbers.get(fragmentId);
@@ -80,9 +79,8 @@ export class FragmentedMessageHandler {
         this.nextFragmentNumbers.set(fragmentId, nextFragmentNumber);
   
         // If there are no more fragments expected and all have been processed
-        
-        if (nextFragmentNumber === fragmentTotal) {
-          controller.close(); // TODO: mighnt need to change this
+        if (isLastFragment) {
+          controller.close();
           this.cleanup(fragmentId);
         }
       }
@@ -95,15 +93,15 @@ export class FragmentedMessageHandler {
     }
   
     private parseDatagram(datagram: Uint8Array): MessageFragment {
-      const utf8Decoder = new TextDecoder("utf-8");
-      const fragmentedFlag = Number(datagram.at(0));
-      const fragmentId = utf8Decoder.decode(datagram.slice(1, 9));
-      const buf = datagram.slice(9, 13);
+      const utf8Decoder = new TextDecoder;
+      const buf = datagram.slice(0, 13);
       const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
-      const fragmentNumber = dv.getUint16(0);
-      const fragmentTotal = dv.getUint16(2);
-      const data = new Uint8Array(datagram.buffer.slice(13)); // Data starts at byte 13
-  
-      return { fragmentedFlag, fragmentId, fragmentNumber, fragmentTotal, data };
+      const fragmentedFlag = dv.getUint8(0); // uint8 -> 1 byte
+      const fragmentId = utf8Decoder.decode(datagram.slice(1,9));
+      const fragmentNumber = dv.getUint16(9);
+      const isLastFragment = Boolean(dv.getUint8(11));
+      const data = new Uint8Array(datagram.buffer.slice(12));
+      
+      return { fragmentedFlag, fragmentId, fragmentNumber, isLastFragment, data };
     }
   }

@@ -21,8 +21,6 @@ type Stream struct {
 
 	notify chan struct{}
 	mutex  sync.Mutex
-
-	init string
 }
 
 func NewStream(inner webtransport.SendStream) (s *Stream) {
@@ -53,7 +51,6 @@ func (s *Stream) Run(ctx context.Context) (err error) {
 		//	fmt.Println(len(chunks))
 		//}
 		for _, chunk := range chunks {
-			fmt.Println(s.init)
 			_, err = s.inner.Write(chunk)
 			if err != nil {
 				return err
@@ -69,7 +66,6 @@ func (s *Stream) Run(ctx context.Context) (err error) {
 			case <-ctx.Done():
 				return ctx.Err()
 			case <-notify:
-				fmt.Println("notified")
 			}
 		}
 	}

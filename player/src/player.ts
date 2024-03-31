@@ -155,9 +155,6 @@ export class Player {
 		this.api = this.quic.then((q) => {
 			return q.createUnidirectionalStream()
 		})
-		// this.api = this.quic.then((q) => {
-		// 	return q.datagrams.writable
-		// })
 
 		// async functions
 		// this.receiveStreams()
@@ -683,7 +680,6 @@ export class Player {
 	}
 
 	async handleSegment(stream: StreamReader, msg: MessageSegment, segmentStartOffset: number) {
-		let utf8Decode = new TextDecoder;
 		let initParser = this.init.get(msg.init);
 		if (!initParser) {
 			initParser = new InitParser()
@@ -747,10 +743,7 @@ export class Player {
 
 			const raw = await stream.peek(4)
 			const size = new DataView(raw.buffer, raw.byteOffset, raw.byteLength).getUint32(0)
-			// console.log(count++, "atom", size)
 			const atom = await stream.bytes(size)
-			console.log(count++, "atom", size)
-			// utf8Decode.decode(atom)
 
 			// boxes: [moof][mdat]...<idle time>...[moof][mdat]
 			// first 4 bytes => size
@@ -820,7 +813,6 @@ export class Player {
 			}
 			totalSegmentSize += size;
 
-			// console.log("Atom Length: " + atom.length)
 			segment.push(atom)
 
 			track.flush() // Flushes if the active segment has new samples
