@@ -109,6 +109,16 @@ func NewServer(config ServerConfig, media *Media) (s *Server, err error) {
 		}
 	})
 
+	mux.HandleFunc("/testgcp", func(w http.ResponseWriter, r *http.Request) {
+		//sending ping to the client
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, err := w.Write([]byte(`{"message": "pong"}`))
+		if err != nil {
+			return
+		}
+	})
+
 	//mux.HandleFunc("/test-datagram", func(w http.ResponseWriter, r *http.Request) {
 	//	sess, err := s.inner.Upgrade(w, r)
 	//	if err != nil {
