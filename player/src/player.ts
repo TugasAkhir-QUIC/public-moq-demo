@@ -154,8 +154,8 @@ export class Player {
 		})
 
 		// async functions
-		// this.receiveStreams()
-		this.receiveDatagrams()
+		this.receiveStreams()
+		// this.receiveDatagrams()
 
 		if (this.activeBWTestInterval > 0) {
 			setTimeout(() => {

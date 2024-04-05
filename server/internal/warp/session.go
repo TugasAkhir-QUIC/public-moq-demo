@@ -58,8 +58,8 @@ func (s *Session) Run(ctx context.Context) (err error) {
 	}
 
 	// Once we've validated the session, now we can start accessing the streams
-	//return invoker.Run(ctx, s.runAccept, s.runAcceptUni, s.runInit, s.runAudio, s.runVideo, s.streams.Repeat)
-	return invoker.Run(ctx, s.runAccept, s.runAcceptUni, s.runInitDatagram, s.runAudioDatagram, s.runVideoDatagram, s.streams.Repeat)
+	return invoker.Run(ctx, s.runAccept, s.runAcceptUni, s.runInit, s.runAudio, s.runVideo, s.streams.Repeat)
+	//return invoker.Run(ctx, s.runAccept, s.runAcceptUni, s.runInitDatagram, s.runAudioDatagram, s.runVideoDatagram, s.streams.Repeat)
 }
 
 func (s *Session) runAccept(ctx context.Context) (err error) {
