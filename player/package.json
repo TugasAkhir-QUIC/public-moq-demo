@@ -1,7 +1,8 @@
 {
   "source": "src/index.html",
   "scripts": {
-    "serve": "parcel serve --https --cert ../cert/localhost.crt --key ../cert/localhost.key",
+    "prodtest": "parcel serve --cert /etc/letsencrypt/live/dickyarian.blue/fullchain.pem --key /etc/letsencrypt/live/dickyarian.blue/privkey.pem",
+    "localtest": "parcel serve --https --cert ../cert/localhost.crt --key ../cert/localhost.key",
     "build": "parcel build src/index.html --no-optimize src/appsettings.js",
     "check": "tsc --noEmit"
   },
