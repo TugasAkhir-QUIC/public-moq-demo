@@ -19,7 +19,7 @@ export class FragmentedMessageHandler {
       this.streamControllers = new Map();
     }
   
-    handleDatagram(datagram: Uint8Array, player: Player) {
+    async handleDatagram(datagram: Uint8Array, player: Player) {
         if (!datagram.at(0)) {
             const stream = new ReadableStream({
                 start(controller) {
