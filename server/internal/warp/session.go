@@ -35,8 +35,10 @@ type Session struct {
 	prefs map[string]string
 
 	continueStreaming bool
-	audioTimeOffset   time.Duration
-	videoTimeOffset   time.Duration
+	//determines whether it is Stream or Datagram
+	category        int
+	audioTimeOffset time.Duration
+	videoTimeOffset time.Duration
 }
 
 func NewSession(connection quic.Connection, session *webtransport.Session, media *Media, server *Server) (s *Session, err error) {
@@ -47,6 +49,7 @@ func NewSession(connection quic.Connection, session *webtransport.Session, media
 	s.media = media
 	s.continueStreaming = true
 	s.server.continueStreaming = true
+	s.category = 1
 	return s, nil
 }
 
@@ -59,7 +62,8 @@ func (s *Session) Run(ctx context.Context) (err error) {
 
 	// Once we've validated the session, now we can start accessing the streams
 	//return invoker.Run(ctx, s.runAccept, s.runAcceptUni, s.runInit, s.runAudio, s.runVideo, s.streams.Repeat)
-	return invoker.Run(ctx, s.runAccept, s.runAcceptUni, s.runInitDatagram, s.runAudioDatagram, s.runVideoDatagram, s.streams.Repeat)
+	//return invoker.Run(ctx, s.runAccept, s.runAcceptUni, s.runInitDatagram, s.runAudioDatagram, s.runVideoDatagram, s.streams.Repeat)
+	return invoker.Run(ctx, s.runAccept, s.runAcceptUni, s.runInitCombined, s.runAudio, s.runVideo, s.streams.Repeat)
 }
 
 func (s *Session) runAccept(ctx context.Context) (err error) {
@@ -135,6 +139,10 @@ func (s *Session) handleStream(ctx context.Context, stream webtransport.ReceiveS
 			s.setDebug(msg.Debug)
 		}
 
+		if msg.Category != nil {
+			s.setSwitch(msg.Category)
+		}
+
 		if msg.Pref != nil {
 			fmt.Printf("* Pref received name: %s value: %s\n", msg.Pref.Name, msg.Pref.Value)
 			s.setPref(msg.Pref)
@@ -148,6 +156,21 @@ func (s *Session) handleStream(ctx context.Context, stream webtransport.ReceiveS
 			}
 		}
 	}
+}
+
+func (s *Session) runInitCombined(ctx context.Context) (err error) {
+	for _, init := range s.inits {
+		if s.category == 0 {
+			err = s.writeInit(ctx, init)
+		} else if s.category == 1 {
+			err = s.writeInitDatagram(ctx, init)
+		}
+		if err != nil {
+			return fmt.Errorf("failed to write init stream: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func (s *Session) runInit(ctx context.Context) (err error) {
@@ -196,11 +219,18 @@ func (s *Session) runAudio(ctx context.Context) (err error) {
 		if segment == nil {
 			return nil
 		}
-
-		err = s.writeSegment(ctx, segment)
-		if err != nil {
-			return fmt.Errorf("failed to write segment stream: %w", err)
+		if s.category == 0 {
+			err = s.writeSegment(ctx, segment)
+			if err != nil {
+				return fmt.Errorf("failed to write segment stream: %w", err)
+			}
+		} else if s.category == 1 {
+			err = s.writeSegmentDatagram(ctx, segment)
+			if err != nil {
+				return fmt.Errorf("failed to write segment datagram: %w", err)
+			}
 		}
+
 	}
 }
 
@@ -261,9 +291,17 @@ func (s *Session) runVideo(ctx context.Context) (err error) {
 			return nil
 		}
 
-		err = s.writeSegment(ctx, segment)
-		if err != nil {
-			return fmt.Errorf("failed to write segment stream: %w", err)
+		// switch between datagram and stream
+		if s.category == 0 {
+			err = s.writeSegment(ctx, segment)
+			if err != nil {
+				return fmt.Errorf("failed to write segment stream: %w", err)
+			}
+		} else if s.category == 1 {
+			err = s.writeSegmentDatagram(ctx, segment)
+			if err != nil {
+				return fmt.Errorf("failed to write segment datagram: %w", err)
+			}
 		}
 	}
 }
@@ -628,6 +666,10 @@ func (s *Session) setDebug(msg *MessageDebug) {
 		s.server.isTcActive = false
 		s.server.continueStreaming = true
 	}
+}
+
+func (s *Session) setSwitch(msg *MessageCategory) {
+	s.category = msg.Category
 }
 
 func (s *Session) setPref(msg *MessagePref) {

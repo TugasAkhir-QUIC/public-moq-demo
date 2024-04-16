@@ -368,7 +368,7 @@ export class Player {
 		console.info('sending preference', pref);
 		await this.sendMessage({ 'x-pref': pref });
 	};
-
+	//send status to server
 	async sendMessage(msg: any) {
 		if (!this.api) {
 			return;
