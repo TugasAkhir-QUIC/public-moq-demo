@@ -21,6 +21,8 @@ const stremRef = document.getElementById("test_stream") as HTMLButtonElement;
 const datagramRef2 = document.getElementById("test_datagram2") as HTMLButtonElement;
 const stremRef2 = document.getElementById("test_stream2") as HTMLButtonElement;
 
+const categoryRef = document.getElementById("category") as HTMLSelectElement;
+
 const params = new URLSearchParams(window.location.search)
 window.estimator = estimator;
 
@@ -204,6 +206,7 @@ const player = new Player({
     resolutions: resolutionsRef,
     activeBWTestRef: activeBWTestRef,
     continueStreamingRef: continueStreamingRef,
+    categoryRef: categoryRef,
     activeBWAsset: window.config.activeBWAsset,
     activeBWTestInterval: window.config.activeBWTestInterval,
     autioStart: window.config.autoStart || true,

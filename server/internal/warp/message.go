@@ -1,12 +1,13 @@
 package warp
 
 type Message struct {
-	Init    *MessageInit    `json:"init,omitempty"`
-	Segment *MessageSegment `json:"segment,omitempty"`
-	Ping    *MessagePing    `json:"x-ping,omitempty"`
-	Pong    *MessagePong    `json:"pong,omitempty"`
-	Debug   *MessageDebug   `json:"debug,omitempty"`
-	Pref    *MessagePref    `json:"x-pref,omitempty"`
+	Init     *MessageInit     `json:"init,omitempty"`
+	Segment  *MessageSegment  `json:"segment,omitempty"`
+	Ping     *MessagePing     `json:"x-ping,omitempty"`
+	Pong     *MessagePong     `json:"pong,omitempty"`
+	Debug    *MessageDebug    `json:"debug,omitempty"`
+	Pref     *MessagePref     `json:"x-pref,omitempty"`
+	Category *MessageCategory `json:"x-category,omitempty"`
 }
 
 type MessageInit struct {
@@ -36,4 +37,7 @@ type MessagePong struct {
 type MessagePref struct {
 	Name  string `json:"name"`
 	Value string `json:"value"`
+}
+type MessageCategory struct {
+	Category int `json:"category"`
 }
