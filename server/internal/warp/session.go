@@ -49,7 +49,7 @@ func NewSession(connection quic.Connection, session *webtransport.Session, media
 	s.media = media
 	s.continueStreaming = true
 	s.server.continueStreaming = true
-	s.category = 1
+	s.category = 0
 	return s, nil
 }
 
@@ -515,6 +515,7 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 	}
 
 	// for debug purposes
+	fmt.Printf("CATEGORY: %d\n", s.category)
 	fmt.Printf("* id: %s ts: %d etp: %d segment size: %d box count:%d chunk count: %d\n", init_message.Segment.Init, init_message.Segment.Timestamp, init_message.Segment.ETP, segment_size, box_count, chunk_count)
 
 	err = datagram.Close()

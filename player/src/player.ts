@@ -29,7 +29,7 @@ export class Player {
 	resolutionsRef: HTMLSelectElement;
 	throttleDDLRef: HTMLSelectElement;
 	continueStreamingRef: HTMLButtonElement; // Continue or pause streaming on the server side
-
+	categoryRef: HTMLSelectElement; // The category dropdown
 	activeBWTestRef: HTMLButtonElement; // The active bw test button
 	activeBWAsset: any; // {url}
 	activeBWResetTimer: NodeJS.Timer | undefined;
@@ -74,6 +74,7 @@ export class Player {
 		this.continueStreamingRef = props.continueStreamingRef
 		this.activeBWTestRef = props.activeBWTestRef
 		this.activeBWAsset = props.activeBWAsset;
+		this.categoryRef = props.categoryRef;
 		this.throughputs = new Map();
 		this.throttleCount = 0;
 		this.url = props.url;
@@ -143,7 +144,8 @@ export class Player {
 		this.throttleDDLRef.addEventListener('change', this.throttleOnChange);
 		this.continueStreamingRef.addEventListener('click', this.continueStreamingClicked);
 		this.activeBWTestRef.addEventListener('click', this.startActiveBWTest);
-
+		//ADD CATEGORYREF CHANGE EVENT
+		this.categoryRef.addEventListener('change', this.changeCategory)
 		console.log('in start | url: %s', this.url);
 		const quic = new WebTransport(this.url)
 		this.quic = quic.ready.then(() => { return quic });
@@ -154,7 +156,7 @@ export class Player {
 		})
 
 		// async functions
-		// this.receiveStreams()
+		this.receiveStreams()
 		this.receiveDatagrams()
 
 		if (this.activeBWTestInterval > 0) {
@@ -184,6 +186,30 @@ export class Player {
 		}
 
 	};
+
+	categoryChange = () => {
+		console.log('in categoryChange | category: %s', this.categoryRef.value);
+		let currentCategory = this.categoryRef.value;
+		let sendMessage = false;
+		//check if category is 0 for streams, 1 for datagrams
+		if (currentCategory === '0') {
+			sendMessage = true;
+		} else if (currentCategory === '1') {
+			sendMessage = true;
+		}
+		//change to int of currentCategory
+		let numCategory = parseInt(currentCategory);
+
+		if (sendMessage) {
+			this.sendMessage({
+				"x-category": {
+					category: numCategory,
+				}
+			})
+		
+		}
+	};
+
 
 	pauseOrResume = (pause?: boolean) => {
 		console.log('in pauseOrResume | paused: %s pause: %s', this.paused, pause);
@@ -276,6 +302,9 @@ export class Player {
 
 	continueStreamingClicked = () => {
 		this.pauseOrResume();
+	};
+	changeCategory = () => {
+		this.categoryChange();
 	};
 
 	startActiveBWTest = () => {
@@ -516,6 +545,9 @@ export class Player {
 		while (true) {
 			++counter;
 			const result = await datagrams.read()
+			if (result) {
+				console.log("datagram masuk")
+			}
 
 			if (result.done) break
 
@@ -536,7 +568,9 @@ export class Player {
 		while (true) {
 			++counter;
 			const result = await streams.read();
-
+			if (result) {
+				console.log("stream masuk")
+			}
 			if (result.done) break
 
 			const stream = result.value
