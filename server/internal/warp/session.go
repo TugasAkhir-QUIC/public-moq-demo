@@ -49,7 +49,7 @@ func NewSession(connection quic.Connection, session *webtransport.Session, media
 	s.media = media
 	s.continueStreaming = true
 	s.server.continueStreaming = true
-	s.category = 1
+	s.category = 0
 	return s, nil
 }
 
