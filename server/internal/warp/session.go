@@ -49,7 +49,7 @@ func NewSession(connection quic.Connection, session *webtransport.Session, media
 	s.media = media
 	s.continueStreaming = true
 	s.server.continueStreaming = true
-	s.category = 0
+	s.category = 1
 	return s, nil
 }
 
@@ -330,15 +330,6 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 		tcRate = 0
 	}
 
-	init_message := Message{
-		Segment: &MessageSegment{
-			Init:             segment.Init.ID,
-			Timestamp:        ms,
-			ETP:              int(s.conn.GetMaxBandwidth() / 1024),
-			TcRate:           tcRate * 1024,
-			AvailabilityTime: int(time.Now().UnixMilli()),
-		},
-	}
 	/*
 
 			Segments on the Wire
@@ -375,14 +366,6 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 
 	*/
 
-	segmentId := uuid.New().String()[:8]
-	chunkId := uuid.New().String()[:8]
-
-	err = datagram.WriteMessageSegment(init_message, 1, segmentId, chunkId)
-	if err != nil {
-		return fmt.Errorf("failed to write segment data: %w", err)
-	}
-
 	segment_size := 0
 	box_count := 0
 	chunk_count := 0
@@ -390,6 +373,30 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 	print_moof_sizes := false
 
 	last_moof_size := 0
+
+	init_message := Message{
+		Segment: &MessageSegment{
+			Init:             segment.Init.ID,
+			Timestamp:        ms,
+			ETP:              int(s.conn.GetMaxBandwidth() / 1024),
+			TcRate:           tcRate * 1024,
+			AvailabilityTime: int(time.Now().UnixMilli()),
+		},
+	}
+
+	segmentId := uuid.New().String()[:8]
+	chunkId := uuid.New().String()[:8]
+	count := 0
+
+	message, err := datagram.GetMessage(init_message)
+	if err != nil {
+		return fmt.Errorf("failed to write segment data: %w", err)
+	}
+	err = datagram.WriteSegment(message, segmentId, chunkId, count)
+	if err != nil {
+		return fmt.Errorf("failed to write segment data: %w", err)
+	}
+	count++
 
 	for {
 		chunkId = uuid.New().String()[:8]
@@ -416,10 +423,18 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 			}
 		}
 
-		err = datagram.WriteSegment(buf, 0, segmentId, chunkId)
+		//if count == 5 || count == 7 {
+		//	count++
+		//	time.AfterFunc(50*time.Microsecond, func() {
+		//		datagram.WriteSegment(buf, segmentId, chunkId, count)
+		//	})
+		//	continue
+		//}
+		err = datagram.WriteSegment(buf, segmentId, chunkId, count)
 		if err != nil {
 			return fmt.Errorf("failed to write segment data: %w", err)
 		}
+		count++
 	}
 
 	// for debug purposes
