@@ -10,9 +10,9 @@ import (
 )
 
 const (
-	fragmented    = byte(1)
-	notFragmented = byte(0)
-	maxSize       = 1100 // more than 1300, the client won't pick it up
+	isSegment  = byte(1)
+	notSegment = byte(0)
+	maxSize    = 1100 // more than 1300, the client won't pick it up
 )
 
 // Wrapper around webtransport.Session to make Write non-blocking.
@@ -73,28 +73,36 @@ func (d *Datagram) Run(ctx context.Context) (err error) {
 	}
 }
 
-func (d *Datagram) WriteSegment(buf []byte, id string, number int, lastFragment int) (numberOffset int, err error) {
+// WriteSegment [isSegment][isInit][segmentID][chunkID][fragmentNumber][fragmentTotal]
+func (d *Datagram) WriteSegment(buf []byte, isInit int, segmentId string, chunkId string) (err error) {
 	chunkLength := int64(len(buf))
 	n := int(chunkLength / maxSize)
 	if n == 0 {
 		var fragmentNumberBuffer [2]byte
-		binary.BigEndian.PutUint16(fragmentNumberBuffer[:], uint16(number))
+		var fragmentTotalBuffer [2]byte
+		binary.BigEndian.PutUint16(fragmentNumberBuffer[:], uint16(0))
+		binary.BigEndian.PutUint16(fragmentTotalBuffer[:], uint16(1))
 		var headerF []byte
-		headerF = append(headerF, fragmented)
-		headerF = append(headerF, []byte(id)...)
+		headerF = append(headerF, isSegment)
+
+		headerF = append(headerF, byte(isInit))
+		headerF = append(headerF, []byte(segmentId)...)
+		headerF = append(headerF, []byte(chunkId)...)
 		headerF = append(headerF, fragmentNumberBuffer[:]...)
-		headerF = append(headerF, byte(lastFragment))
+		headerF = append(headerF, fragmentTotalBuffer[:]...)
 
 		_, err = d.Write(append(headerF, buf...))
 		if err != nil {
-			return 0, err
+			return err
 		}
-		return 1, nil
+		return nil
 	}
 	totalFragments := n
 	if chunkLength%maxSize != 0 {
 		totalFragments += 1
 	}
+	var fragmentTotalBuffer [2]byte
+	binary.BigEndian.PutUint16(fragmentTotalBuffer[:], uint16(totalFragments))
 	// TODO: make sure totalFragments <  65,535
 	// split chunk
 	for i := 0; i < totalFragments; i++ {
@@ -107,20 +115,23 @@ func (d *Datagram) WriteSegment(buf []byte, id string, number int, lastFragment 
 		}
 
 		var fragmentNumberBuffer [2]byte
-		binary.BigEndian.PutUint16(fragmentNumberBuffer[:], uint16(i+number))
+		binary.BigEndian.PutUint16(fragmentNumberBuffer[:], uint16(i))
 		var headerF []byte
-		headerF = append(headerF, fragmented)
-		headerF = append(headerF, []byte(id)...)
+		headerF = append(headerF, isSegment)
+
+		headerF = append(headerF, byte(isInit))
+		headerF = append(headerF, []byte(segmentId)...)
+		headerF = append(headerF, []byte(chunkId)...)
 		headerF = append(headerF, fragmentNumberBuffer[:]...)
-		headerF = append(headerF, byte(lastFragment))
+		headerF = append(headerF, fragmentTotalBuffer[:]...)
 
 		_, err = d.Write(append(headerF, buf[start:end]...))
 		if err != nil {
-			return 0, err
+			return err
 		}
 	}
 
-	return totalFragments, nil
+	return nil
 }
 
 func (d *Datagram) Write(buf []byte) (n int, err error) {
@@ -146,20 +157,39 @@ func (d *Datagram) Write(buf []byte) (n int, err error) {
 	return len(buf), nil
 }
 
-func (d *Datagram) GetMessage(msg Message) (raw []byte, err error) {
+// WriteMessageSegment [isSegment][isInit][segmentID][chunkID][fragmentNumber][fragmentTotal]
+func (d *Datagram) WriteMessageSegment(msg Message, isInit int, segmentId string, chunkId string) (err error) {
 	payload, err := json.Marshal(msg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal message: %w", err)
+		return fmt.Errorf("failed to marshal message: %w", err)
 	}
+
+	var msgByte []byte
+	msgByte = append(msgByte, isSegment)
+
+	var fragmentNumberBuffer [2]byte
+	var fragmentTotalBuffer [2]byte
+	binary.BigEndian.PutUint16(fragmentNumberBuffer[:], uint16(0))
+	binary.BigEndian.PutUint16(fragmentTotalBuffer[:], uint16(1))
+
+	msgByte = append(msgByte, byte(isInit))
+	msgByte = append(msgByte, []byte(segmentId)...)
+	msgByte = append(msgByte, []byte(chunkId)...)
+	msgByte = append(msgByte, fragmentNumberBuffer[:]...)
+	msgByte = append(msgByte, fragmentTotalBuffer[:]...)
 
 	var size [4]byte
 	binary.BigEndian.PutUint32(size[:], uint32(len(payload)+8))
 
-	var msgByte []byte
 	msgByte = append(msgByte, size[:]...)
 	msgByte = append(msgByte, []byte("warp")...)
 	msgByte = append(msgByte, payload...)
-	return msgByte, nil
+	_, err = d.Write(msgByte)
+	if err != nil {
+		return fmt.Errorf("failed to write message: %w", err)
+	}
+
+	return nil
 }
 
 func (d *Datagram) WriteMessage(msg Message, raw []byte) (err error) {
@@ -168,11 +198,12 @@ func (d *Datagram) WriteMessage(msg Message, raw []byte) (err error) {
 		return fmt.Errorf("failed to marshal message: %w", err)
 	}
 
+	var msgByte []byte
+	msgByte = append(msgByte, notSegment)
+
 	var size [4]byte
 	binary.BigEndian.PutUint32(size[:], uint32(len(payload)+8))
 
-	var msgByte []byte
-	msgByte = append(msgByte, notFragmented)
 	msgByte = append(msgByte, size[:]...)
 	msgByte = append(msgByte, []byte("warp")...)
 	msgByte = append(msgByte, payload...)
