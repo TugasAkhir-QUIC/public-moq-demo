@@ -74,7 +74,7 @@ func (d *Datagram) Run(ctx context.Context) (err error) {
 }
 
 // WriteSegment [isSegment][segmentID][chunkID][chunkNumber][fragmentNumber][fragmentTotal]
-func (d *Datagram) WriteSegment(buf []byte, segmentId string, chunkId string, chunkNumber int) (err error) {
+func (d *Datagram) WriteSegment(buf []byte, segmentId string, chunkId string, isLastChunk int, chunkNumber int) (err error) {
 	chunkLength := int64(len(buf))
 	n := int(chunkLength / maxSize)
 	if n == 0 {
@@ -89,6 +89,7 @@ func (d *Datagram) WriteSegment(buf []byte, segmentId string, chunkId string, ch
 
 		headerF = append(headerF, []byte(segmentId)...)
 		headerF = append(headerF, []byte(chunkId)...)
+		headerF = append(headerF, byte(isLastChunk))
 		headerF = append(headerF, chunkNumberBuffer[:]...)
 		headerF = append(headerF, fragmentNumberBuffer[:]...)
 		headerF = append(headerF, fragmentTotalBuffer[:]...)
@@ -124,6 +125,7 @@ func (d *Datagram) WriteSegment(buf []byte, segmentId string, chunkId string, ch
 
 		headerF = append(headerF, []byte(segmentId)...)
 		headerF = append(headerF, []byte(chunkId)...)
+		headerF = append(headerF, byte(isLastChunk))
 		headerF = append(headerF, chunkNumberBuffer[:]...)
 		headerF = append(headerF, fragmentNumberBuffer[:]...)
 		headerF = append(headerF, fragmentTotalBuffer[:]...)

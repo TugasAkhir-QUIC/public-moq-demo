@@ -3,6 +3,7 @@
 	type MessageFragment = {
 	segmentID: string;
 	chunkID: string;
+	isLastChunk: boolean
 	chunkNumber: number;
 	fragmentNumber: number;
 	fragmentTotal: number;
@@ -39,6 +40,13 @@
 
 		if (!this.segmentStreams.has(fragment.segmentID)) {
 			this.initializeStream(fragment.segmentID, player);
+		}
+
+		if (fragment.isLastChunk) {
+			this.flush(fragment.segmentID);
+			this.segmentStreams.get(fragment.segmentID)?.close();
+			this.cleanup(fragment.segmentID);
+			return
 		}
 
 		this.storeFragment(fragment);
@@ -142,13 +150,14 @@
 		const utf8Decoder = new TextDecoder("utf-8");
 		const segmentID = utf8Decoder.decode(datagram.slice(0, 8));
 		const chunkID = utf8Decoder.decode(datagram.slice(8, 16));
-		const buf = datagram.slice(16, 22);
+		const buf = datagram.slice(16, 23);
 		const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
-		const chunkNumber = dv.getUint16(0);
-		const fragmentNumber = dv.getUint16(2);
-		const fragmentTotal = dv.getUint16(4);
-		const data = new Uint8Array(datagram.buffer.slice(22));
+		const isLastChunk = Boolean(dv.getUint8(0));
+		const chunkNumber = dv.getUint16(1);
+		const fragmentNumber = dv.getUint16(3);
+		const fragmentTotal = dv.getUint16(5);
+		const data = new Uint8Array(datagram.buffer.slice(23));
 
-		return { segmentID, chunkID, chunkNumber, fragmentNumber, fragmentTotal, data };
+		return { segmentID, chunkID, isLastChunk, chunkNumber, fragmentNumber, fragmentTotal, data };
 	}
 	}

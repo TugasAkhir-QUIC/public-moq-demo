@@ -392,7 +392,7 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 	if err != nil {
 		return fmt.Errorf("failed to write segment data: %w", err)
 	}
-	err = datagram.WriteSegment(message, segmentId, chunkId, count)
+	err = datagram.WriteSegment(message, segmentId, chunkId, 0, count)
 	if err != nil {
 		return fmt.Errorf("failed to write segment data: %w", err)
 	}
@@ -405,6 +405,7 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 
 		buf, err := segment.Read(ctx)
 		if errors.Is(err, io.EOF) {
+			err = datagram.WriteSegment([]byte{}, segmentId, chunkId, 1, count)
 			break
 		} else if err != nil {
 			return fmt.Errorf("failed to read segment data: %w", err)
@@ -426,11 +427,11 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 		//if count == 5 || count == 7 {
 		//	count++
 		//	time.AfterFunc(50*time.Microsecond, func() {
-		//		datagram.WriteSegment(buf, segmentId, chunkId, count)
+		//		datagram.WriteSegment(buf, segmentId, chunkId, 0, count)
 		//	})
 		//	continue
 		//}
-		err = datagram.WriteSegment(buf, segmentId, chunkId, count)
+		err = datagram.WriteSegment(buf, segmentId, chunkId, 0, count)
 		if err != nil {
 			return fmt.Errorf("failed to write segment data: %w", err)
 		}
