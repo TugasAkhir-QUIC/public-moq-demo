@@ -757,18 +757,17 @@ export class Player {
 						}
 					}
 
-					// TODO: UNCOMMENT LOG
-					// if (this.totalChunkCount >= this.getSWMAWindowSize() && this.totalChunkCount % this.getSWMACalculationInterval() === 0) {
-					// 	const stats = this.chunkStats.slice(-this.getSWMAWindowSize());
-					// 	let filteredStats: any[] = this.filterStats(stats, this.getSWMAThreshold(), this.getSWMAThresholdType(), this.throughputs.get('swma') || 0);
-					// 	const tput = this.computeTPut(filteredStats);
-					// 	if (tput > 0) {
-					// 		this.throughputs.set('swma', tput);
-					// 	} else {
-					// 		console.warn('tput is zero.');
-					// 	}
+					if (this.totalChunkCount >= this.getSWMAWindowSize() && this.totalChunkCount % this.getSWMACalculationInterval() === 0) {
+						const stats = this.chunkStats.slice(-this.getSWMAWindowSize());
+						let filteredStats: any[] = this.filterStats(stats, this.getSWMAThreshold(), this.getSWMAThresholdType(), this.throughputs.get('swma') || 0);
+						const tput = this.computeTPut(filteredStats);
+						if (tput > 0) {
+							this.throughputs.set('swma', tput);
+						} else {
+							console.warn('tput is zero.');
+						}
 
-					// }
+					}
 				}
 			}
 			totalSegmentSize += size;
