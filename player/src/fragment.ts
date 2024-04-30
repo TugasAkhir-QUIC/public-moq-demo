@@ -14,7 +14,6 @@
 	private fragmentBuffers: Map<string, Uint8Array[]>;
 	private chunkBuffers: Map<string, Map<number, Uint8Array>>;
 	private nextChunkNumbers: Map<string, number>;
-	private maxChunkNumber: Map<string, number>;
 	private segmentStreams: Map<string, ReadableStreamDefaultController<Uint8Array>>;
 
 	constructor() {
@@ -22,7 +21,6 @@
 		this.chunkBuffers = new Map();
 		this.nextChunkNumbers = new Map();
 		this.segmentStreams = new Map();
-		this.maxChunkNumber = new Map();
 	}
 
 	async handleDatagram(datagram: Uint8Array, player: Player) {
@@ -39,15 +37,14 @@
 		const fragment = this.parseDatagram(datagram.slice(1));
 
 		if (!this.segmentStreams.has(fragment.segmentID)) {
+			console.log("CREATE ", fragment.segmentID)
 			this.initializeStream(fragment.segmentID, player);
 		}
 
-		if (fragment.isLastChunk) {
-			this.flush(fragment.segmentID);
-			this.segmentStreams.get(fragment.segmentID)?.close();
-			this.cleanup(fragment.segmentID);
-			return
-		}
+		// if (fragment.isLastChunk) {
+		// 	this.cleanup(fragment.segmentID);
+		// 	return
+		// }
 
 		this.storeFragment(fragment);
 	}
@@ -60,13 +57,12 @@
 			},
 			cancel: () => {
 				this.cleanup(segmentID);
+				console.log("CANCEL", segmentID)
 			}
 		});
 		setTimeout(() => {
-			this.flush(segmentID);
-			this.segmentStreams.get(segmentID)?.close();
 			this.cleanup(segmentID);
-		}, 2000); 
+		}, 3000); 
 		player.handleStream(stream);
 	}
 
@@ -76,6 +72,7 @@
 		}
 		const fragmentBuffer = this.fragmentBuffers.get(fragment.chunkID);
 		if (fragmentBuffer) {
+			// if (fragment.chunkNumber !== 65 && fragment.fragmentNumber !== 3)
 			fragmentBuffer[fragment.fragmentNumber] = fragment.data;
 			if (fragmentBuffer.every(element => element !== null)) {
 				const totalLength = fragmentBuffer.reduce((acc, val) => acc + val.length, 0);
@@ -93,15 +90,6 @@
 				}
 				const chunkBuffers = this.chunkBuffers.get(fragment.segmentID)!;
 				chunkBuffers.set(fragment.chunkNumber, completeData)
-				
-				if (this.maxChunkNumber.has(fragment.segmentID)) {
-					const currMaxNumber = this.maxChunkNumber.get(fragment.segmentID)
-					if (currMaxNumber! < fragment.chunkNumber) {
-						this.maxChunkNumber.set(fragment.segmentID, fragment.chunkNumber)
-					}
-				} else {
-					this.maxChunkNumber.set(fragment.segmentID, fragment.chunkNumber)
-				}
 
 				this.fragmentBuffers.delete(fragment.chunkID);
 
@@ -112,38 +100,37 @@
 						const data = chunkBuffers.get(nextNumber)
 						if (data) {
 							controller.enqueue(data)
+							chunkBuffers.delete(nextNumber)
+							if (nextNumber === 0) console.log("MSG INIT ", fragment.segmentID)
 						}
 						nextNumber++
 					}
+					this.nextChunkNumbers.set(fragment.segmentID, nextNumber)
 				}
-				this.nextChunkNumbers.set(fragment.segmentID, nextNumber!)
 			}
 		}
 	}
 
 	private flush(segmentID: string) {
-		let nextNumber = this.nextChunkNumbers.get(segmentID)
-		const maxNumber = this.maxChunkNumber.get(segmentID)
 		const controller = this.segmentStreams.get(segmentID)
 		const buffer = this.chunkBuffers.get(segmentID)
-
-		if (nextNumber !== undefined && maxNumber !== undefined && controller !== undefined && buffer !== undefined) {
-			while (nextNumber <= maxNumber) {
-				console.log("A!", nextNumber, maxNumber)
-				const data = buffer.get(nextNumber)
-				if (data) {
-					controller.enqueue(data)
-				}
-				nextNumber++
-			}
+		if (controller != undefined && buffer != undefined) {
+			const sortedEntries = Array.from(buffer.entries()).sort((a, b) => a[0] - b[0]);
+			console.log("REMAINDER",segmentID, sortedEntries.length)
+			sortedEntries.forEach(entry => {
+				console.log("A!", entry[0], segmentID)
+				controller.enqueue(entry[1])
+			});
 		}
 	}
 
 	private cleanup(segmentID: string) {
+		this.flush(segmentID);
+		this.segmentStreams.get(segmentID)?.close();
 		this.segmentStreams.delete(segmentID);
 		this.nextChunkNumbers.delete(segmentID);
 		this.chunkBuffers.delete(segmentID);
-		this.maxChunkNumber.delete(segmentID);
+		console.log("DELETE ", segmentID)
 	}
 
 	private parseDatagram(datagram: Uint8Array): MessageFragment {
