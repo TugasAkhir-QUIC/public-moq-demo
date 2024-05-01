@@ -47,7 +47,7 @@ export class FragmentedMessageHandler {
 		const fragment = this.parseDatagram(datagram.slice(1));
 
 		if (!this.segmentStreams.has(fragment.segmentID)) {
-			// console.log("CREATE ", fragment.segmentID)
+			console.log("CREATE ", fragment.segmentID)
 			this.initializeStream(fragment.segmentID, player);
 		}
 
@@ -67,7 +67,7 @@ export class FragmentedMessageHandler {
 			},
 			cancel: () => {
 				this.cleanup(segmentID);
-				// console.log("CANCEL", segmentID)
+				console.log("CANCEL", segmentID)
 			}
 		});
 		setTimeout(() => {
@@ -144,8 +144,9 @@ export class FragmentedMessageHandler {
 		const chunkBuffers = this.chunkBuffers.get(fragment.segmentID);
 		if (chunkBuffers !== undefined && nextNumber !== undefined && controller !== undefined) {
 			// Skip dropped
-			if (chunkBuffers.has(nextNumber+1)) {
-				// console.log("SKIP ", nextNumber)
+			let dataNext = chunkBuffers.get(nextNumber+1)
+			if (nextNumber !== 0 && dataNext !== undefined && dataNext.isFilled) {
+				console.log("SKIP ", nextNumber)
 				chunkBuffers.delete(nextNumber)
 				nextNumber++
 			}
@@ -162,7 +163,7 @@ export class FragmentedMessageHandler {
 					controller.enqueue(data.mdat)
 				}
 				chunkBuffers.delete(nextNumber)
-				// if (nextNumber === 0) console.log("MSG INIT ", fragment.segmentID)
+				if (nextNumber === 0) console.log("MSG INIT ", fragment.segmentID)
 				
 				nextNumber++
 				data = chunkBuffers.get(nextNumber)
@@ -176,9 +177,9 @@ export class FragmentedMessageHandler {
 		const buffer = this.chunkBuffers.get(segmentID)
 		if (controller != undefined && buffer != undefined) {
 			const sortedEntries = Array.from(buffer.entries()).sort((a, b) => a[0] - b[0]);
-			// console.log("REMAINDER",segmentID, sortedEntries.length)
+			console.log("REMAINDER",segmentID, sortedEntries.length)
 			sortedEntries.forEach(entry => {
-				// console.log("A!", entry[0], segmentID)
+				console.log("A!", entry[0], segmentID)
 				if (entry[1].isOther) {
 					controller.enqueue(entry[1].other)
 				}
@@ -198,7 +199,7 @@ export class FragmentedMessageHandler {
 		this.segmentStreams.delete(segmentID);
 		this.nextChunkNumbers.delete(segmentID);
 		this.chunkBuffers.delete(segmentID);
-		// console.log("DELETE ", segmentID)
+		console.log("DELETE ", segmentID)
 	}
 
 	private parseDatagram(datagram: Uint8Array): MessageFragment {
