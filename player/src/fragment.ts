@@ -72,7 +72,7 @@
 		}
 		const fragmentBuffer = this.fragmentBuffers.get(fragment.chunkID);
 		if (fragmentBuffer) {
-			// if (fragment.chunkNumber !== 65 && fragment.fragmentNumber !== 3)
+			// if (fragment.chunkNumber !== 70 && fragment.fragmentNumber !== 3)
 			fragmentBuffer[fragment.fragmentNumber] = fragment.data;
 			if (fragmentBuffer.every(element => element !== null)) {
 				const totalLength = fragmentBuffer.reduce((acc, val) => acc + val.length, 0);
@@ -93,21 +93,30 @@
 
 				this.fragmentBuffers.delete(fragment.chunkID);
 
-				let nextNumber = this.nextChunkNumbers.get(fragment.segmentID)
-				const controller = this.segmentStreams.get(fragment.segmentID)
-				if (nextNumber !== undefined && controller !== undefined) {
-					while (chunkBuffers.has(nextNumber)) {
-						const data = chunkBuffers.get(nextNumber)
-						if (data) {
-							controller.enqueue(data)
-							chunkBuffers.delete(nextNumber)
-							if (nextNumber === 0) console.log("MSG INIT ", fragment.segmentID)
-						}
-						nextNumber++
-					}
-					this.nextChunkNumbers.set(fragment.segmentID, nextNumber)
-				}
+				
 			}
+		}
+		let nextNumber = this.nextChunkNumbers.get(fragment.segmentID);
+		const controller = this.segmentStreams.get(fragment.segmentID);
+		const chunkBuffers = this.chunkBuffers.get(fragment.segmentID);
+		if (chunkBuffers !== undefined && nextNumber !== undefined && controller !== undefined) {
+			// Skip dropped
+			if (chunkBuffers.has(nextNumber+2)) {
+				console.log("SKIP ", nextNumber, nextNumber+1)
+				chunkBuffers.delete(nextNumber)
+				nextNumber++
+				nextNumber++
+			}
+			while (chunkBuffers.has(nextNumber)) {
+				const data = chunkBuffers.get(nextNumber)
+				if (data) {
+					controller.enqueue(data)
+					chunkBuffers.delete(nextNumber)
+					if (nextNumber === 0) console.log("MSG INIT ", fragment.segmentID)
+				}
+				nextNumber++
+			}
+			this.nextChunkNumbers.set(fragment.segmentID, nextNumber)
 		}
 	}
 
@@ -125,7 +134,7 @@
 	}
 
 	private cleanup(segmentID: string) {
-		this.flush(segmentID);
+		// this.flush(segmentID);
 		this.segmentStreams.get(segmentID)?.close();
 		this.segmentStreams.delete(segmentID);
 		this.nextChunkNumbers.delete(segmentID);

@@ -691,7 +691,7 @@ export class Player {
 		let lastMoofClockTime = 0;
 
 		// One day I'll figure it out; until then read one top-level atom at a time
-		let count = 0
+		let count = 1
 		while (true) {
 			if (await stream.done()) {
 				console.log('end of stream')
@@ -777,7 +777,7 @@ export class Player {
 			// 	continue
 			// }
 			segment.push(atom)
-			// count++
+			count++
 
 			track.flush() // Flushes if the active segment has new samples
 		}
