@@ -392,7 +392,7 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 	if err != nil {
 		return fmt.Errorf("failed to write segment data: %w", err)
 	}
-	err = datagram.WriteSegment(message, segmentId, chunkId, 0, count)
+	err = datagram.WriteSegment(message, segmentId, chunkId, count)
 	if err != nil {
 		return fmt.Errorf("failed to write segment data: %w", err)
 	}
@@ -405,7 +405,6 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 
 		buf, err := segment.Read(ctx)
 		if errors.Is(err, io.EOF) {
-			//err = datagram.WriteSegment([]byte{}, segmentId, chunkId, 1, count)
 			break
 		} else if err != nil {
 			return fmt.Errorf("failed to read segment data: %w", err)
@@ -423,9 +422,6 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 				fmt.Printf("* chunk: %d size: %d time offset: %d\n", chunk_count, chunk_size, time.Now().UnixMilli()-start)
 			}
 		}
-		//if segment.Init.ID == "4" {
-		//	fmt.Println(segmentId, string(buf[4:8]), count)
-		//}
 		//if count == 5 || count == 7 {
 		//	count++
 		//	time.AfterFunc(50*time.Microsecond, func() {
@@ -433,21 +429,28 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 		//	})
 		//	continue
 		//}
-		// writeSegmentDatagram()
-		if count == 6 || count == 7 {
-			count++
-			continue
-		}
-		err = datagram.WriteSegment(buf, segmentId, chunkId, 0, count)
+
+		// to generate chunk dropped
+		//if string(buf[4:8]) == "mdat" && (count == 6 || count == 7) {
+		//	count++
+		//	continue
+		//}
+		//if string(buf[4:8]) == "moof" && (count == 15) {
+		//	continue
+		//}
+		err = datagram.WriteSegment(buf, segmentId, chunkId, count)
 		if err != nil {
 			return fmt.Errorf("failed to write segment data: %w", err)
 		}
-		count++
+
+		if string(buf[4:8]) == "mdat" || string(buf[4:8]) == "styp" {
+			count++
+		}
 	}
 
 	// for debug purposes
 	//fmt.Printf("CATEGORY: %d\n", s.category)
-	//fmt.Printf("* id: %s ts: %d etp: %d segment size: %d box count:%d chunk count: %d\n", init_message.Segment.Init, init_message.Segment.Timestamp, init_message.Segment.ETP, segment_size, box_count, chunk_count)
+	fmt.Printf("* id: %s ts: %d etp: %d segment size: %d box count:%d chunk count: %d\n", init_message.Segment.Init, init_message.Segment.Timestamp, init_message.Segment.ETP, segment_size, box_count, chunk_count)
 
 	err = datagram.Close()
 	if err != nil {
@@ -567,11 +570,12 @@ func (s *Session) writeSegment(ctx context.Context, segment *MediaSegment) (err 
 				fmt.Printf("* chunk: %d size: %d time offset: %d\n", chunk_count, chunk_size, time.Now().UnixMilli()-start)
 			}
 		}
-		// writeSegment()
-		if count == 6 || count == 7 {
-			count++
-			continue
-		}
+
+		// to generate chunk dropped
+		//if count == 6 || count == 7 {
+		//	count++
+		//	continue
+		//}
 
 		// NOTE: This won't block because of our wrapper
 		_, err = stream.Write(buf)
