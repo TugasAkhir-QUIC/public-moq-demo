@@ -1,4 +1,5 @@
 import { Player } from "./player";
+import { IQueue, Queue } from "./queue";
 
 type MessageFragment = {
 	segmentID: string;
@@ -70,6 +71,8 @@ export class FragmentedMessageHandler {
 			this.fragmentBuffers.set(fragment.chunkID, new Array(fragment.fragmentTotal).fill(null))
 		}
 		const fragmentBuffer = this.fragmentBuffers.get(fragment.chunkID);
+		const isDelayed = this.isDelayed.get(fragment.segmentID);
+		const controller = this.segmentStreams.get(fragment.segmentID);
 		if (fragmentBuffer) {
 			// if (fragment.chunkNumber === 30 && fragment.fragmentNumber !== 3)
 			fragmentBuffer[fragment.fragmentNumber] = fragment.data;
@@ -87,25 +90,27 @@ export class FragmentedMessageHandler {
 				if (!this.chunkBuffers.has(fragment.segmentID)) {
 					this.chunkBuffers.set(fragment.segmentID, new Queue())
 				}
-				const chunkBuffers = this.chunkBuffers.get(fragment.segmentID)!;
-				const controller = this.segmentStreams.get(fragment.segmentID)!
-
-				if (fragment.fragmentNumber === 0) {
-					this.isDelayed.set(fragment.segmentID, false)
-					controller.enqueue(completeData)
-				} else if (this.isDelayed.get(fragment.segmentID)!) {
-					chunkBuffers.enqueue(completeData)
-				} else {
-					chunkBuffers.enqueue(completeData)
-					while (chunkBuffers.size() !== 0) {
-						controller.enqueue(chunkBuffers.dequeue())
+				const chunkBuffers = this.chunkBuffers.get(fragment.segmentID)
+				if (isDelayed !== undefined && controller !== undefined && chunkBuffers !== undefined) {
+					if (fragment.chunkNumber === 0) {
+						controller.enqueue(completeData)
+						this.isDelayed.set(fragment.segmentID, false)
+					} else {
+						chunkBuffers.enqueue(completeData)
 					}
 				}
 
 				this.fragmentBuffers.delete(fragment.chunkID);
 			}
 		}
-		// unorder chunk, map<segmentId, notDelayed>. Delayed chunk in queue
+		const chunkBuffers = this.chunkBuffers.get(fragment.segmentID)
+		if (isDelayed !== undefined && controller !== undefined && chunkBuffers !== undefined) {
+			if (!isDelayed) {
+				while (chunkBuffers.size() !== 0) {
+					controller.enqueue(chunkBuffers.dequeue())
+				}
+			}
+		}
 	}
 
 	private cleanup(segmentID: string) {
@@ -130,37 +135,4 @@ export class FragmentedMessageHandler {
 
 		return { segmentID, chunkID, chunkNumber, fragmentNumber, fragmentTotal, data };
 	}
-}
-
-function fromCharCodeUint8(uint8arr: any[]) {
-	var arr = [];
-	for (var i = 0; i < uint8arr.length; i++) {
-		arr[i] = uint8arr[i];
-	}
-	return String.fromCharCode.apply(null, arr);
-}
-
-interface IQueue<T> {
-    enqueue(item: T): void;
-    dequeue(): T | undefined;
-    size(): number;
-}
-
-class Queue<T>  {
-    private storage: T[] = [];
-
-    constructor(private capacity: number = Infinity) {}
-
-    enqueue(item: T): void {
-        if (this.size() === this.capacity) {
-        throw Error("Queue has reached max capacity, you cannot add more items");
-        }
-        this.storage.push(item);
-    }
-    dequeue(): T | undefined {
-        return this.storage.shift();
-    }
-    size(): number {
-        return this.storage.length;
-    }
 }
