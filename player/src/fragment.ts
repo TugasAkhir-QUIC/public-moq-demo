@@ -13,11 +13,11 @@ type MessageFragment = {
 type Chunk = {
 	isFilled: boolean;
 	isStyp: boolean;
-	isOther: boolean;
+	isWarp: boolean;
 	moof: Uint8Array;
 	mdat: Uint8Array;
 	styp: Uint8Array;
-	other: Uint8Array;
+	warp: Uint8Array;
 }
 
 export class FragmentedMessageHandler {
@@ -102,8 +102,9 @@ export class FragmentedMessageHandler {
 				
 				const boxType = fromCharCodeUint8([...completeData.slice(4, 8)]);
 
+				let chunk;
 				if (chunkBuffers.has(fragment.chunkNumber)) {
-					const chunk = chunkBuffers.get(fragment.chunkNumber)!
+					chunk = chunkBuffers.get(fragment.chunkNumber)!
 					if (boxType == "styp") {
 						// this one shouldn't be possible
 						chunk.isStyp = true
@@ -112,14 +113,14 @@ export class FragmentedMessageHandler {
 						chunk.moof = completeData
 					} else if (boxType == "mdat") {
 						chunk.mdat = completeData
-					} else {
-						chunk.isOther = true
-						chunk.other = completeData
+					} else if (boxType == "warp") {
+						chunk.isWarp = true
+						chunk.warp = completeData
 					}
 					chunk.isFilled = true
 					chunkBuffers.set(fragment.chunkNumber, chunk)
 				} else {
-					const chunk = { isFilled: false, isStyp: false, isOther: false, moof: new Uint8Array(), mdat: new Uint8Array(), styp: new Uint8Array(), other: new Uint8Array()}
+					chunk = { isFilled: false, isStyp: false, isWarp: false, moof: new Uint8Array(), mdat: new Uint8Array(), styp: new Uint8Array(), warp: new Uint8Array()}
 					if (boxType == "styp") {
 						chunk.isFilled = true
 						chunk.isStyp = true
@@ -128,10 +129,10 @@ export class FragmentedMessageHandler {
 						chunk.moof = completeData
 					} else if (boxType == "mdat") {
 						chunk.mdat = completeData
-					} else {
+					} else if (boxType == "warp") {
 						chunk.isFilled = true
-						chunk.isOther = true
-						chunk.other = completeData
+						chunk.isWarp = true
+						chunk.warp = completeData
 					}
 					chunkBuffers.set(fragment.chunkNumber, chunk)
 				}
@@ -139,6 +140,7 @@ export class FragmentedMessageHandler {
 				this.fragmentBuffers.delete(fragment.chunkID);
 			}
 		}
+		// unorder chunk, map<segmentId, notDelayed>. Delayed chunk in queue
 		let nextNumber = this.nextChunkNumbers.get(fragment.segmentID);
 		const controller = this.segmentStreams.get(fragment.segmentID);
 		const chunkBuffers = this.chunkBuffers.get(fragment.segmentID);
@@ -153,8 +155,8 @@ export class FragmentedMessageHandler {
 			let data = chunkBuffers.get(nextNumber)
 			while (data !== undefined && data.isFilled) {
 				
-				if (data.isOther) {
-					controller.enqueue(data.other)
+				if (data.isWarp) {
+					controller.enqueue(data.warp)
 				}
 				else if (data.isStyp) {
 					controller.enqueue(data.styp)
@@ -180,8 +182,8 @@ export class FragmentedMessageHandler {
 			// console.log("REMAINDER",segmentID, sortedEntries.length)
 			sortedEntries.forEach(entry => {
 				// console.log("A!", entry[0], segmentID)
-				if (entry[1].isOther) {
-					controller.enqueue(entry[1].other)
+				if (entry[1].isWarp) {
+					controller.enqueue(entry[1].warp)
 				}
 				else if (entry[1].isStyp) {
 					controller.enqueue(entry[1].styp)
