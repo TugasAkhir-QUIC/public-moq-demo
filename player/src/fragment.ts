@@ -9,27 +9,16 @@ type MessageFragment = {
 	data: Uint8Array;
 };
 
-// this is so moof and mdat is not separated, it is actually 2 chunk, except for styp
-type Chunk = {
-	isFilled: boolean;
-	isStyp: boolean;
-	isWarp: boolean;
-	moof: Uint8Array;
-	mdat: Uint8Array;
-	styp: Uint8Array;
-	warp: Uint8Array;
-}
-
 export class FragmentedMessageHandler {
 	private fragmentBuffers: Map<string, Uint8Array[]>;
-	private chunkBuffers: Map<string, Map<number, Chunk>>;
-	private nextChunkNumbers: Map<string, number>;
+	private chunkBuffers: Map<string, IQueue<Uint8Array>>;
+	private isDelayed: Map<string, boolean>;
 	private segmentStreams: Map<string, ReadableStreamDefaultController<Uint8Array>>;
 
 	constructor() {
 		this.fragmentBuffers = new Map();
 		this.chunkBuffers = new Map();
-		this.nextChunkNumbers = new Map();
+		this.isDelayed = new Map();
 		this.segmentStreams = new Map();
 	}
 
@@ -63,7 +52,7 @@ export class FragmentedMessageHandler {
 		const stream = new ReadableStream<Uint8Array>({
 			start: (controller) => {
 				this.segmentStreams.set(segmentID, controller);
-				this.nextChunkNumbers.set(segmentID, 0);
+				this.isDelayed.set(segmentID, true);
 			},
 			cancel: () => {
 				this.cleanup(segmentID);
@@ -82,7 +71,7 @@ export class FragmentedMessageHandler {
 		}
 		const fragmentBuffer = this.fragmentBuffers.get(fragment.chunkID);
 		if (fragmentBuffer) {
-			// if (fragment.chunkNumber !== 70 && fragment.fragmentNumber !== 3)
+			// if (fragment.chunkNumber === 30 && fragment.fragmentNumber !== 3)
 			fragmentBuffer[fragment.fragmentNumber] = fragment.data;
 			if (fragmentBuffer.every(element => element !== null)) {
 				const totalLength = fragmentBuffer.reduce((acc, val) => acc + val.length, 0);
@@ -96,110 +85,34 @@ export class FragmentedMessageHandler {
 				});
 
 				if (!this.chunkBuffers.has(fragment.segmentID)) {
-					this.chunkBuffers.set(fragment.segmentID, new Map())
+					this.chunkBuffers.set(fragment.segmentID, new Queue())
 				}
 				const chunkBuffers = this.chunkBuffers.get(fragment.segmentID)!;
-				
-				const boxType = fromCharCodeUint8([...completeData.slice(4, 8)]);
+				const controller = this.segmentStreams.get(fragment.segmentID)!
 
-				let chunk;
-				if (chunkBuffers.has(fragment.chunkNumber)) {
-					chunk = chunkBuffers.get(fragment.chunkNumber)!
-					if (boxType == "styp") {
-						// this one shouldn't be possible
-						chunk.isStyp = true
-						chunk.styp = completeData
-					} else if (boxType == "moof") {
-						chunk.moof = completeData
-					} else if (boxType == "mdat") {
-						chunk.mdat = completeData
-					} else if (boxType == "warp") {
-						chunk.isWarp = true
-						chunk.warp = completeData
-					}
-					chunk.isFilled = true
-					chunkBuffers.set(fragment.chunkNumber, chunk)
+				if (fragment.fragmentNumber === 0) {
+					this.isDelayed.set(fragment.segmentID, false)
+					controller.enqueue(completeData)
+				} else if (this.isDelayed.get(fragment.segmentID)!) {
+					chunkBuffers.enqueue(completeData)
 				} else {
-					chunk = { isFilled: false, isStyp: false, isWarp: false, moof: new Uint8Array(), mdat: new Uint8Array(), styp: new Uint8Array(), warp: new Uint8Array()}
-					if (boxType == "styp") {
-						chunk.isFilled = true
-						chunk.isStyp = true
-						chunk.styp = completeData
-					} else if (boxType == "moof") {
-						chunk.moof = completeData
-					} else if (boxType == "mdat") {
-						chunk.mdat = completeData
-					} else if (boxType == "warp") {
-						chunk.isFilled = true
-						chunk.isWarp = true
-						chunk.warp = completeData
+					chunkBuffers.enqueue(completeData)
+					while (chunkBuffers.size() !== 0) {
+						controller.enqueue(chunkBuffers.dequeue())
 					}
-					chunkBuffers.set(fragment.chunkNumber, chunk)
 				}
 
 				this.fragmentBuffers.delete(fragment.chunkID);
 			}
 		}
 		// unorder chunk, map<segmentId, notDelayed>. Delayed chunk in queue
-		let nextNumber = this.nextChunkNumbers.get(fragment.segmentID);
-		const controller = this.segmentStreams.get(fragment.segmentID);
-		const chunkBuffers = this.chunkBuffers.get(fragment.segmentID);
-		if (chunkBuffers !== undefined && nextNumber !== undefined && controller !== undefined) {
-			// Skip dropped
-			let dataNext = chunkBuffers.get(nextNumber+1)
-			if (nextNumber !== 0 && dataNext !== undefined && dataNext.isFilled) {
-				console.log("SKIP ", nextNumber)
-				chunkBuffers.delete(nextNumber)
-				nextNumber++
-			}
-			let data = chunkBuffers.get(nextNumber)
-			while (data !== undefined && data.isFilled) {
-				
-				if (data.isWarp) {
-					controller.enqueue(data.warp)
-				}
-				else if (data.isStyp) {
-					controller.enqueue(data.styp)
-				} else {
-					controller.enqueue(data.moof)
-					controller.enqueue(data.mdat)
-				}
-				chunkBuffers.delete(nextNumber)
-				// if (nextNumber === 0) console.log("MSG INIT ", fragment.segmentID)
-				
-				nextNumber++
-				data = chunkBuffers.get(nextNumber)
-			}
-			this.nextChunkNumbers.set(fragment.segmentID, nextNumber)
-		}
-	}
-
-	private flush(segmentID: string) {
-		const controller = this.segmentStreams.get(segmentID)
-		const buffer = this.chunkBuffers.get(segmentID)
-		if (controller != undefined && buffer != undefined) {
-			const sortedEntries = Array.from(buffer.entries()).sort((a, b) => a[0] - b[0]);
-			// console.log("REMAINDER",segmentID, sortedEntries.length)
-			sortedEntries.forEach(entry => {
-				// console.log("A!", entry[0], segmentID)
-				if (entry[1].isWarp) {
-					controller.enqueue(entry[1].warp)
-				}
-				else if (entry[1].isStyp) {
-					controller.enqueue(entry[1].styp)
-				} else {
-					controller.enqueue(entry[1].moof)
-					controller.enqueue(entry[1].mdat)
-				}
-			});
-		}
 	}
 
 	private cleanup(segmentID: string) {
 		// this.flush(segmentID);
 		this.segmentStreams.get(segmentID)?.close();
 		this.segmentStreams.delete(segmentID);
-		this.nextChunkNumbers.delete(segmentID);
+		this.isDelayed.delete(segmentID);
 		this.chunkBuffers.delete(segmentID);
 		// console.log("DELETE ", segmentID)
 	}
@@ -225,4 +138,29 @@ function fromCharCodeUint8(uint8arr: any[]) {
 		arr[i] = uint8arr[i];
 	}
 	return String.fromCharCode.apply(null, arr);
+}
+
+interface IQueue<T> {
+    enqueue(item: T): void;
+    dequeue(): T | undefined;
+    size(): number;
+}
+
+class Queue<T>  {
+    private storage: T[] = [];
+
+    constructor(private capacity: number = Infinity) {}
+
+    enqueue(item: T): void {
+        if (this.size() === this.capacity) {
+        throw Error("Queue has reached max capacity, you cannot add more items");
+        }
+        this.storage.push(item);
+    }
+    dequeue(): T | undefined {
+        return this.storage.shift();
+    }
+    size(): number {
+        return this.storage.length;
+    }
 }
