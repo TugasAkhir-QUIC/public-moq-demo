@@ -1,4 +1,5 @@
 import { Player } from "./player";
+import { IQueue, Queue } from "./queue";
 
 type MessageFragment = {
 	segmentID: string;
@@ -9,27 +10,16 @@ type MessageFragment = {
 	data: Uint8Array;
 };
 
-// this is so moof and mdat is not separated, it is actually 2 chunk, except for styp
-type Chunk = {
-	isFilled: boolean;
-	isStyp: boolean;
-	isWarp: boolean;
-	moof: Uint8Array;
-	mdat: Uint8Array;
-	styp: Uint8Array;
-	warp: Uint8Array;
-}
-
 export class FragmentedMessageHandler {
 	private fragmentBuffers: Map<string, Uint8Array[]>;
-	private chunkBuffers: Map<string, Map<number, Chunk>>;
-	private nextChunkNumbers: Map<string, number>;
+	private chunkBuffers: Map<string, IQueue<Uint8Array>>;
+	private isDelayed: Map<string, boolean>;
 	private segmentStreams: Map<string, ReadableStreamDefaultController<Uint8Array>>;
 
 	constructor() {
 		this.fragmentBuffers = new Map();
 		this.chunkBuffers = new Map();
-		this.nextChunkNumbers = new Map();
+		this.isDelayed = new Map();
 		this.segmentStreams = new Map();
 	}
 
@@ -63,7 +53,7 @@ export class FragmentedMessageHandler {
 		const stream = new ReadableStream<Uint8Array>({
 			start: (controller) => {
 				this.segmentStreams.set(segmentID, controller);
-				this.nextChunkNumbers.set(segmentID, 0);
+				this.isDelayed.set(segmentID, true);
 			},
 			cancel: () => {
 				this.cleanup(segmentID);
@@ -81,8 +71,10 @@ export class FragmentedMessageHandler {
 			this.fragmentBuffers.set(fragment.chunkID, new Array(fragment.fragmentTotal).fill(null))
 		}
 		const fragmentBuffer = this.fragmentBuffers.get(fragment.chunkID);
+		const isDelayed = this.isDelayed.get(fragment.segmentID);
+		const controller = this.segmentStreams.get(fragment.segmentID);
 		if (fragmentBuffer) {
-			// if (fragment.chunkNumber !== 70 && fragment.fragmentNumber !== 3)
+			// if (fragment.chunkNumber === 30 && fragment.fragmentNumber !== 3)
 			fragmentBuffer[fragment.fragmentNumber] = fragment.data;
 			if (fragmentBuffer.every(element => element !== null)) {
 				const totalLength = fragmentBuffer.reduce((acc, val) => acc + val.length, 0);
@@ -96,102 +88,28 @@ export class FragmentedMessageHandler {
 				});
 
 				if (!this.chunkBuffers.has(fragment.segmentID)) {
-					this.chunkBuffers.set(fragment.segmentID, new Map())
+					this.chunkBuffers.set(fragment.segmentID, new Queue())
 				}
-				const chunkBuffers = this.chunkBuffers.get(fragment.segmentID)!;
-				
-				const boxType = fromCharCodeUint8([...completeData.slice(4, 8)]);
-
-				let chunk;
-				if (chunkBuffers.has(fragment.chunkNumber)) {
-					chunk = chunkBuffers.get(fragment.chunkNumber)!
-					if (boxType == "styp") {
-						// this one shouldn't be possible
-						chunk.isStyp = true
-						chunk.styp = completeData
-					} else if (boxType == "moof") {
-						chunk.moof = completeData
-					} else if (boxType == "mdat") {
-						chunk.mdat = completeData
-					} else if (boxType == "warp") {
-						chunk.isWarp = true
-						chunk.warp = completeData
+				const chunkBuffers = this.chunkBuffers.get(fragment.segmentID)
+				if (isDelayed !== undefined && controller !== undefined && chunkBuffers !== undefined) {
+					if (fragment.chunkNumber === 0) {
+						controller.enqueue(completeData)
+						this.isDelayed.set(fragment.segmentID, false)
+					} else {
+						chunkBuffers.enqueue(completeData)
 					}
-					chunk.isFilled = true
-					chunkBuffers.set(fragment.chunkNumber, chunk)
-				} else {
-					chunk = { isFilled: false, isStyp: false, isWarp: false, moof: new Uint8Array(), mdat: new Uint8Array(), styp: new Uint8Array(), warp: new Uint8Array()}
-					if (boxType == "styp") {
-						chunk.isFilled = true
-						chunk.isStyp = true
-						chunk.styp = completeData
-					} else if (boxType == "moof") {
-						chunk.moof = completeData
-					} else if (boxType == "mdat") {
-						chunk.mdat = completeData
-					} else if (boxType == "warp") {
-						chunk.isFilled = true
-						chunk.isWarp = true
-						chunk.warp = completeData
-					}
-					chunkBuffers.set(fragment.chunkNumber, chunk)
 				}
 
 				this.fragmentBuffers.delete(fragment.chunkID);
 			}
 		}
-		// unorder chunk, map<segmentId, notDelayed>. Delayed chunk in queue
-		let nextNumber = this.nextChunkNumbers.get(fragment.segmentID);
-		const controller = this.segmentStreams.get(fragment.segmentID);
-		const chunkBuffers = this.chunkBuffers.get(fragment.segmentID);
-		if (chunkBuffers !== undefined && nextNumber !== undefined && controller !== undefined) {
-			// Skip dropped
-			let dataNext = chunkBuffers.get(nextNumber+1)
-			if (nextNumber !== 0 && dataNext !== undefined && dataNext.isFilled) {
-				console.log("SKIP ", nextNumber)
-				chunkBuffers.delete(nextNumber)
-				nextNumber++
+		const chunkBuffers = this.chunkBuffers.get(fragment.segmentID)
+		if (isDelayed !== undefined && controller !== undefined && chunkBuffers !== undefined) {
+			if (!isDelayed) {
+				while (chunkBuffers.size() !== 0) {
+					controller.enqueue(chunkBuffers.dequeue())
+				}
 			}
-			let data = chunkBuffers.get(nextNumber)
-			while (data !== undefined && data.isFilled) {
-				
-				if (data.isWarp) {
-					controller.enqueue(data.warp)
-				}
-				else if (data.isStyp) {
-					controller.enqueue(data.styp)
-				} else {
-					controller.enqueue(data.moof)
-					controller.enqueue(data.mdat)
-				}
-				chunkBuffers.delete(nextNumber)
-				// if (nextNumber === 0) console.log("MSG INIT ", fragment.segmentID)
-				
-				nextNumber++
-				data = chunkBuffers.get(nextNumber)
-			}
-			this.nextChunkNumbers.set(fragment.segmentID, nextNumber)
-		}
-	}
-
-	private flush(segmentID: string) {
-		const controller = this.segmentStreams.get(segmentID)
-		const buffer = this.chunkBuffers.get(segmentID)
-		if (controller != undefined && buffer != undefined) {
-			const sortedEntries = Array.from(buffer.entries()).sort((a, b) => a[0] - b[0]);
-			// console.log("REMAINDER",segmentID, sortedEntries.length)
-			sortedEntries.forEach(entry => {
-				// console.log("A!", entry[0], segmentID)
-				if (entry[1].isWarp) {
-					controller.enqueue(entry[1].warp)
-				}
-				else if (entry[1].isStyp) {
-					controller.enqueue(entry[1].styp)
-				} else {
-					controller.enqueue(entry[1].moof)
-					controller.enqueue(entry[1].mdat)
-				}
-			});
 		}
 	}
 
@@ -199,7 +117,7 @@ export class FragmentedMessageHandler {
 		// this.flush(segmentID);
 		this.segmentStreams.get(segmentID)?.close();
 		this.segmentStreams.delete(segmentID);
-		this.nextChunkNumbers.delete(segmentID);
+		this.isDelayed.delete(segmentID);
 		this.chunkBuffers.delete(segmentID);
 		// console.log("DELETE ", segmentID)
 	}
@@ -217,12 +135,4 @@ export class FragmentedMessageHandler {
 
 		return { segmentID, chunkID, chunkNumber, fragmentNumber, fragmentTotal, data };
 	}
-}
-
-function fromCharCodeUint8(uint8arr: any[]) {
-	var arr = [];
-	for (var i = 0; i < uint8arr.length; i++) {
-		arr[i] = uint8arr[i];
-	}
-	return String.fromCharCode.apply(null, arr);
 }

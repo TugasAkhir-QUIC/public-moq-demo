@@ -397,9 +397,9 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 		return fmt.Errorf("failed to write segment data: %w", err)
 	}
 	count++
-
+	chunkId = uuid.New().String()[:8]
+	var chunk []byte
 	for {
-		chunkId = uuid.New().String()[:8]
 		// Get the next fragment
 		start := time.Now().UnixMilli()
 
@@ -433,18 +433,30 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 		// to generate chunk dropped
 		//if string(buf[4:8]) == "mdat" && (count == 6 || count == 7) {
 		//	count++
+		//	chunkId = uuid.New().String()[:8]
+		//	chunk = nil
 		//	continue
 		//}
 		//if string(buf[4:8]) == "moof" && (count == 15) {
 		//	continue
 		//}
-		err = datagram.WriteSegment(buf, segmentId, chunkId, count)
-		if err != nil {
-			return fmt.Errorf("failed to write segment data: %w", err)
+		//if segment.Init.ID != "4" {
+		//	fmt.Println(segmentId, string(buf[4:8]), count, chunkId)
+		//}
+
+		if string(buf[4:8]) == "moof" {
+			chunk = append(chunk, buf...)
 		}
 
 		if string(buf[4:8]) == "mdat" || string(buf[4:8]) == "styp" {
 			count++
+			chunkId = uuid.New().String()[:8]
+			chunk = append(chunk, buf...)
+			err = datagram.WriteSegment(chunk, segmentId, chunkId, count)
+			chunk = nil
+			if err != nil {
+				return fmt.Errorf("failed to write segment data: %w", err)
+			}
 		}
 	}
 
