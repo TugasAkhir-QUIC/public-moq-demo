@@ -431,18 +431,19 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 		//}
 
 		// to generate chunk dropped
-		if string(buf[4:8]) == "mdat" && (count == 6 || count == 7) {
-			count++
-			chunkId = uuid.New().String()[:8]
-			chunk = nil
-			continue
-		}
-		if string(buf[4:8]) == "moof" && (count == 15) {
-			continue
-		}
-		if segment.Init.ID != "4" {
-			fmt.Println(segmentId, string(buf[4:8]), count, chunkId)
-		}
+		//if string(buf[4:8]) == "mdat" && (count == 6 || count == 7) {
+		//	count++
+		//	chunkId = uuid.New().String()[:8]
+		//	chunk = nil
+		//	continue
+		//}
+		//if string(buf[4:8]) == "moof" && (count == 15) {
+		//	continue
+		//}
+		//if segment.Init.ID != "4" {
+		//	fmt.Println(segmentId, string(buf[4:8]), count, chunkId)
+		//}
+
 		if string(buf[4:8]) == "moof" {
 			chunk = append(chunk, buf...)
 		}
@@ -461,7 +462,7 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 
 	// for debug purposes
 	//fmt.Printf("CATEGORY: %d\n", s.category)
-	//fmt.Printf("* id: %s ts: %d etp: %d segment size: %d box count:%d chunk count: %d\n", init_message.Segment.Init, init_message.Segment.Timestamp, init_message.Segment.ETP, segment_size, box_count, chunk_count)
+	fmt.Printf("* id: %s ts: %d etp: %d segment size: %d box count:%d chunk count: %d\n", init_message.Segment.Init, init_message.Segment.Timestamp, init_message.Segment.ETP, segment_size, box_count, chunk_count)
 
 	err = datagram.Close()
 	if err != nil {
