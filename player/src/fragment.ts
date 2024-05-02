@@ -1,107 +1,228 @@
 import { Player } from "./player";
 
 type MessageFragment = {
-    fragmentedFlag: number;
-    fragmentId: string;
-    fragmentNumber: number;
-    isLastFragment: boolean
-    data: Uint8Array;
+	segmentID: string;
+	chunkID: string;
+	chunkNumber: number;
+	fragmentNumber: number;
+	fragmentTotal: number;
+	data: Uint8Array;
 };
 
-export class FragmentedMessageHandler {
-    private fragmentBuffers: Map<string, Map<number, Uint8Array>>;
-    private nextFragmentNumbers: Map<string, number>;
-    private streamControllers: Map<string, ReadableStreamDefaultController<Uint8Array>>;
-  
-    constructor() {
-      this.fragmentBuffers = new Map();
-      this.nextFragmentNumbers = new Map();
-      this.streamControllers = new Map();
-    }
-  
-    async handleDatagram(datagram: Uint8Array, player: Player) {
-        if (!datagram.at(0)) {
-            const stream = new ReadableStream({
-                start(controller) {
-                controller.enqueue(datagram.slice(1));
-                controller.close();
-                }
-            });
-            player.handleStream(stream)
-        }
-        const fragment = this.parseDatagram(datagram);
-        // console.log(fragment)
+// this is so moof and mdat is not separated, it is actually 2 chunk, except for styp
+type Chunk = {
+	isFilled: boolean;
+	isStyp: boolean;
+	isWarp: boolean;
+	moof: Uint8Array;
+	mdat: Uint8Array;
+	styp: Uint8Array;
+	warp: Uint8Array;
+}
 
-        if (!this.streamControllers.has(fragment.fragmentId)) {
-            const stream = new ReadableStream<Uint8Array>({
-                start: (controller) => {
-                this.streamControllers.set(fragment.fragmentId, controller);
-                this.fragmentBuffers.set(fragment.fragmentId, new Map());
-                this.nextFragmentNumbers.set(fragment.fragmentId, 0);
-                },
-                cancel: () => {
-                this.cleanup(fragment.fragmentId);
-                }
-            });
-            setTimeout(() => {
-                this.streamControllers.get(fragment.fragmentId)?.close()
-                this.cleanup(fragment.fragmentId);
-            }, 2000); 
-            this.storeFragment(fragment);
-            player.handleStream(stream)
-        } else {
-            this.storeFragment(fragment);
-        }
-    }
-  
-    private storeFragment(fragment: MessageFragment) {
-        const buffers = this.fragmentBuffers.get(fragment.fragmentId);
-        if (buffers) {
-            buffers.set(fragment.fragmentNumber, fragment.data);
-            this.processFragments(fragment.fragmentId, fragment.isLastFragment);
-        }   
-    }
-  
-    private processFragments(fragmentId: string, isLastFragment: boolean) {
-      const buffers = this.fragmentBuffers.get(fragmentId);
-      const controller = this.streamControllers.get(fragmentId);
-      let nextFragmentNumber = this.nextFragmentNumbers.get(fragmentId);
-  
-      if (buffers && controller && nextFragmentNumber !== undefined) {
-        while (buffers.has(nextFragmentNumber)) {
-          const data = buffers.get(nextFragmentNumber);
-          if (data) {
-            controller.enqueue(data);
-            buffers.delete(nextFragmentNumber);
-            nextFragmentNumber++;
-          }
-        }
-        this.nextFragmentNumbers.set(fragmentId, nextFragmentNumber);
-  
-        // If there are no more fragments expected and all have been processed
-        if (isLastFragment) {
-          controller.close();
-          this.cleanup(fragmentId);
-        }
-      }
-    }
-  
-    private cleanup(fragmentId: string) {
-      this.fragmentBuffers.delete(fragmentId);
-      this.streamControllers.delete(fragmentId);
-      this.nextFragmentNumbers.delete(fragmentId);
-    }
-  
-    private parseDatagram(datagram: Uint8Array): MessageFragment {
-      const utf8Decoder = new TextDecoder;
-      const buf = datagram.slice(0, 13);
-      const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
-      const fragmentedFlag = dv.getUint8(0); // uint8 -> 1 byte
-      const fragmentId = utf8Decoder.decode(datagram.slice(1,9));
-      const fragmentNumber = dv.getUint16(9);
-      const isLastFragment = Boolean(dv.getUint8(11));
-      const data = new Uint8Array(datagram.buffer.slice(12));
-      
-      return { fragmentedFlag, fragmentId, fragmentNumber, isLastFragment, data };
-    }
-  }
+export class FragmentedMessageHandler {
+	private fragmentBuffers: Map<string, Uint8Array[]>;
+	private chunkBuffers: Map<string, Map<number, Chunk>>;
+	private nextChunkNumbers: Map<string, number>;
+	private segmentStreams: Map<string, ReadableStreamDefaultController<Uint8Array>>;
+
+	constructor() {
+		this.fragmentBuffers = new Map();
+		this.chunkBuffers = new Map();
+		this.nextChunkNumbers = new Map();
+		this.segmentStreams = new Map();
+	}
+
+	async handleDatagram(datagram: Uint8Array, player: Player) {
+		const isSegment = datagram.at(0)
+		if (!isSegment) {
+			const stream = new ReadableStream({
+				start(controller) {
+				controller.enqueue(datagram.slice(1));
+				controller.close();
+				}
+			});
+			player.handleStream(stream)
+		}  
+		const fragment = this.parseDatagram(datagram.slice(1));
+
+		if (!this.segmentStreams.has(fragment.segmentID)) {
+			// console.log("CREATE ", fragment.segmentID)
+			this.initializeStream(fragment.segmentID, player);
+		}
+
+		// if (fragment.isLastChunk) {
+		// 	this.cleanup(fragment.segmentID);
+		// 	return
+		// }
+
+		this.storeFragment(fragment);
+	}
+
+	private initializeStream(segmentID: string, player: Player) {
+		const stream = new ReadableStream<Uint8Array>({
+			start: (controller) => {
+				this.segmentStreams.set(segmentID, controller);
+				this.nextChunkNumbers.set(segmentID, 0);
+			},
+			cancel: () => {
+				this.cleanup(segmentID);
+				// console.log("CANCEL", segmentID)
+			}
+		});
+		setTimeout(() => {
+			this.cleanup(segmentID);
+		}, 3000); 
+		player.handleStream(stream);
+	}
+
+	private storeFragment(fragment: MessageFragment) {
+		if (!this.fragmentBuffers.has(fragment.chunkID)) {
+			this.fragmentBuffers.set(fragment.chunkID, new Array(fragment.fragmentTotal).fill(null))
+		}
+		const fragmentBuffer = this.fragmentBuffers.get(fragment.chunkID);
+		if (fragmentBuffer) {
+			// if (fragment.chunkNumber !== 70 && fragment.fragmentNumber !== 3)
+			fragmentBuffer[fragment.fragmentNumber] = fragment.data;
+			if (fragmentBuffer.every(element => element !== null)) {
+				const totalLength = fragmentBuffer.reduce((acc, val) => acc + val.length, 0);
+				const completeData = new Uint8Array(totalLength);
+
+				// Copy each Uint8Array into completeData
+				let offset = 0;
+				fragmentBuffer.forEach((chunk) => {
+					completeData.set(chunk, offset);
+					offset += chunk.length;
+				});
+
+				if (!this.chunkBuffers.has(fragment.segmentID)) {
+					this.chunkBuffers.set(fragment.segmentID, new Map())
+				}
+				const chunkBuffers = this.chunkBuffers.get(fragment.segmentID)!;
+				
+				const boxType = fromCharCodeUint8([...completeData.slice(4, 8)]);
+
+				let chunk;
+				if (chunkBuffers.has(fragment.chunkNumber)) {
+					chunk = chunkBuffers.get(fragment.chunkNumber)!
+					if (boxType == "styp") {
+						// this one shouldn't be possible
+						chunk.isStyp = true
+						chunk.styp = completeData
+					} else if (boxType == "moof") {
+						chunk.moof = completeData
+					} else if (boxType == "mdat") {
+						chunk.mdat = completeData
+					} else if (boxType == "warp") {
+						chunk.isWarp = true
+						chunk.warp = completeData
+					}
+					chunk.isFilled = true
+					chunkBuffers.set(fragment.chunkNumber, chunk)
+				} else {
+					chunk = { isFilled: false, isStyp: false, isWarp: false, moof: new Uint8Array(), mdat: new Uint8Array(), styp: new Uint8Array(), warp: new Uint8Array()}
+					if (boxType == "styp") {
+						chunk.isFilled = true
+						chunk.isStyp = true
+						chunk.styp = completeData
+					} else if (boxType == "moof") {
+						chunk.moof = completeData
+					} else if (boxType == "mdat") {
+						chunk.mdat = completeData
+					} else if (boxType == "warp") {
+						chunk.isFilled = true
+						chunk.isWarp = true
+						chunk.warp = completeData
+					}
+					chunkBuffers.set(fragment.chunkNumber, chunk)
+				}
+
+				this.fragmentBuffers.delete(fragment.chunkID);
+			}
+		}
+		// unorder chunk, map<segmentId, notDelayed>. Delayed chunk in queue
+		let nextNumber = this.nextChunkNumbers.get(fragment.segmentID);
+		const controller = this.segmentStreams.get(fragment.segmentID);
+		const chunkBuffers = this.chunkBuffers.get(fragment.segmentID);
+		if (chunkBuffers !== undefined && nextNumber !== undefined && controller !== undefined) {
+			// Skip dropped
+			let dataNext = chunkBuffers.get(nextNumber+1)
+			if (nextNumber !== 0 && dataNext !== undefined && dataNext.isFilled) {
+				console.log("SKIP ", nextNumber)
+				chunkBuffers.delete(nextNumber)
+				nextNumber++
+			}
+			let data = chunkBuffers.get(nextNumber)
+			while (data !== undefined && data.isFilled) {
+				
+				if (data.isWarp) {
+					controller.enqueue(data.warp)
+				}
+				else if (data.isStyp) {
+					controller.enqueue(data.styp)
+				} else {
+					controller.enqueue(data.moof)
+					controller.enqueue(data.mdat)
+				}
+				chunkBuffers.delete(nextNumber)
+				// if (nextNumber === 0) console.log("MSG INIT ", fragment.segmentID)
+				
+				nextNumber++
+				data = chunkBuffers.get(nextNumber)
+			}
+			this.nextChunkNumbers.set(fragment.segmentID, nextNumber)
+		}
+	}
+
+	private flush(segmentID: string) {
+		const controller = this.segmentStreams.get(segmentID)
+		const buffer = this.chunkBuffers.get(segmentID)
+		if (controller != undefined && buffer != undefined) {
+			const sortedEntries = Array.from(buffer.entries()).sort((a, b) => a[0] - b[0]);
+			// console.log("REMAINDER",segmentID, sortedEntries.length)
+			sortedEntries.forEach(entry => {
+				// console.log("A!", entry[0], segmentID)
+				if (entry[1].isWarp) {
+					controller.enqueue(entry[1].warp)
+				}
+				else if (entry[1].isStyp) {
+					controller.enqueue(entry[1].styp)
+				} else {
+					controller.enqueue(entry[1].moof)
+					controller.enqueue(entry[1].mdat)
+				}
+			});
+		}
+	}
+
+	private cleanup(segmentID: string) {
+		// this.flush(segmentID);
+		this.segmentStreams.get(segmentID)?.close();
+		this.segmentStreams.delete(segmentID);
+		this.nextChunkNumbers.delete(segmentID);
+		this.chunkBuffers.delete(segmentID);
+		// console.log("DELETE ", segmentID)
+	}
+
+	private parseDatagram(datagram: Uint8Array): MessageFragment {
+		const utf8Decoder = new TextDecoder("utf-8");
+		const segmentID = utf8Decoder.decode(datagram.slice(0, 8));
+		const chunkID = utf8Decoder.decode(datagram.slice(8, 16));
+		const buf = datagram.slice(16, 22);
+		const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+		const chunkNumber = dv.getUint16(0);
+		const fragmentNumber = dv.getUint16(2);
+		const fragmentTotal = dv.getUint16(4);
+		const data = new Uint8Array(datagram.buffer.slice(22));
+
+		return { segmentID, chunkID, chunkNumber, fragmentNumber, fragmentTotal, data };
+	}
+}
+
+function fromCharCodeUint8(uint8arr: any[]) {
+	var arr = [];
+	for (var i = 0; i < uint8arr.length; i++) {
+		arr[i] = uint8arr[i];
+	}
+	return String.fromCharCode.apply(null, arr);
+}

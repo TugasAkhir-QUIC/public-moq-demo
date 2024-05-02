@@ -546,7 +546,7 @@ export class Player {
 			++counter;
 			const result = await datagrams.read()
 			if (result) {
-				console.log("datagram masuk")
+				// console.log("datagram masuk")
 			}
 
 			if (result.done) break
@@ -589,9 +589,9 @@ export class Player {
 			}
 
 			const size = await r.uint32();
-			console.log("Size: " + size)
+			// console.log("Size: " + size)
 			const typ = new TextDecoder('utf-8').decode(await r.bytes(4));
-			console.log("Type: " + typ)
+			// console.log("Type: " + typ)
 			if (typ !== "warp") throw "expected warp atom"
 			if (size < 8) throw "atom too small"
 
@@ -599,10 +599,10 @@ export class Player {
 			const msg = JSON.parse(payload) as Message
 
 			if (msg.init) {
-				console.log("Msg Init: " + msg.init.id)
+				// console.log("Msg Init: " + msg.init.id)
 				return this.handleInit(r, msg.init)
 			} else if (msg.segment) {
-				console.log("Msg Segment: " + msg.segment.init)
+				// console.log("Msg Segment: " + msg.segment.init)
 				return this.handleSegment(r, msg.segment, start)
 			} else if (msg.pong) {
 				return this.handlePong(r, msg.pong)
@@ -663,6 +663,7 @@ export class Player {
 		}
 		this.lastSegmentTimestamp = msg.timestamp;
 
+		// TODO: UNCOMMENT LOG
 		console.log('msg: %o tcRate: %d serverBandwidth: %d', msg, this.tcRate, this.serverBandwidth)
 
 		const segment = new Segment(track.source, init, msg.timestamp)
@@ -746,6 +747,7 @@ export class Player {
 					if (chunkCounter === 1) { // TODO: IFRAME
 						let filteredStats = [stat];
 						const val = this.computeTPut(filteredStats);
+						// TODO: UNCOMMENT LOG
 						console.log('ifa calc', val, stat, this.throughputs.get('ifa'));
 						// if the value is an outlier (100 times more than the last measurement)
 						// discard it
@@ -755,7 +757,6 @@ export class Player {
 						}
 					}
 
-					// TODO: UNCOMMENT LOG
 					if (this.totalChunkCount >= this.getSWMAWindowSize() && this.totalChunkCount % this.getSWMACalculationInterval() === 0) {
 						const stats = this.chunkStats.slice(-this.getSWMAWindowSize());
 						let filteredStats: any[] = this.filterStats(stats, this.getSWMAThreshold(), this.getSWMAThresholdType(), this.throughputs.get('swma') || 0);
@@ -771,7 +772,12 @@ export class Player {
 			}
 			totalSegmentSize += size;
 
+			// if (count === 5 || count === 15) {
+			// 	count++
+			// 	continue
+			// }
 			segment.push(atom)
+			count++
 
 			track.flush() // Flushes if the active segment has new samples
 		}

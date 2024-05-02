@@ -61,9 +61,7 @@ func (s *Session) Run(ctx context.Context) (err error) {
 	}
 
 	// Once we've validated the session, now we can start accessing the streams
-	//return invoker.Run(ctx, s.runAccept, s.runAcceptUni, s.runInit, s.runAudio, s.runVideo, s.streams.Repeat)
-	//return invoker.Run(ctx, s.runAccept, s.runAcceptUni, s.runInitDatagram, s.runAudioDatagram, s.runVideoDatagram, s.streams.Repeat)
-	return invoker.Run(ctx, s.runAccept, s.runAcceptUni, s.runInitCombined, s.runAudio, s.runVideo, s.streams.Repeat)
+	return invoker.Run(ctx, s.runAccept, s.runAcceptUni, s.runInit, s.runAudio, s.runVideo, s.streams.Repeat)
 }
 
 func (s *Session) runAccept(ctx context.Context) (err error) {
@@ -158,35 +156,13 @@ func (s *Session) handleStream(ctx context.Context, stream webtransport.ReceiveS
 	}
 }
 
-func (s *Session) runInitCombined(ctx context.Context) (err error) {
+func (s *Session) runInit(ctx context.Context) (err error) {
 	for _, init := range s.inits {
 		if s.category == 0 {
 			err = s.writeInit(ctx, init)
 		} else if s.category == 1 {
 			err = s.writeInitDatagram(ctx, init)
 		}
-		if err != nil {
-			return fmt.Errorf("failed to write init stream: %w", err)
-		}
-	}
-
-	return nil
-}
-
-func (s *Session) runInit(ctx context.Context) (err error) {
-	for _, init := range s.inits {
-		err = s.writeInit(ctx, init)
-		if err != nil {
-			return fmt.Errorf("failed to write init stream: %w", err)
-		}
-	}
-
-	return nil
-}
-
-func (s *Session) runInitDatagram(ctx context.Context) (err error) {
-	for _, init := range s.inits {
-		err = s.writeInitDatagram(ctx, init)
 		if err != nil {
 			return fmt.Errorf("failed to write init stream: %w", err)
 		}
@@ -234,38 +210,6 @@ func (s *Session) runAudio(ctx context.Context) (err error) {
 	}
 }
 
-func (s *Session) runAudioDatagram(ctx context.Context) (err error) {
-	start := time.Now()
-	for {
-		if !s.continueStreaming {
-			// Sleep to let cpu off
-			err := invoker.Sleep(10 * time.Millisecond)(ctx)
-			if err != nil {
-				return fmt.Errorf("failed in runAudio: %w", err)
-			}
-			s.audioTimeOffset += time.Since(start)
-			continue
-		} else {
-			// reset start
-			start = time.Now()
-		}
-
-		segment, err := s.audio.Next(ctx, s, s.audioTimeOffset)
-		if err != nil {
-			return fmt.Errorf("failed to get next segment: %w", err)
-		}
-
-		if segment == nil {
-			return nil
-		}
-
-		err = s.writeSegmentDatagram(ctx, segment)
-		if err != nil {
-			return fmt.Errorf("failed to write segment stream: %w", err)
-		}
-	}
-}
-
 func (s *Session) runVideo(ctx context.Context) (err error) {
 	start := time.Now()
 	for {
@@ -302,38 +246,6 @@ func (s *Session) runVideo(ctx context.Context) (err error) {
 			if err != nil {
 				return fmt.Errorf("failed to write segment datagram: %w", err)
 			}
-		}
-	}
-}
-
-func (s *Session) runVideoDatagram(ctx context.Context) (err error) {
-	start := time.Now()
-	for {
-		if !s.continueStreaming {
-			// Sleep to let cpu off
-			err := invoker.Sleep(10 * time.Millisecond)(ctx)
-			if err != nil {
-				return fmt.Errorf("failed in runVideo: %w", err)
-			}
-			s.videoTimeOffset += time.Since(start)
-			continue
-		} else {
-			// reset start
-			start = time.Now()
-		}
-
-		segment, err := s.video.Next(ctx, s, s.videoTimeOffset)
-		if err != nil {
-			return fmt.Errorf("failed to get next segment: %w", err)
-		}
-
-		if segment == nil {
-			return nil
-		}
-
-		err = s.writeSegmentDatagram(ctx, segment)
-		if err != nil {
-			return fmt.Errorf("failed to write segment stream: %w", err)
 		}
 	}
 }
@@ -418,15 +330,6 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 		tcRate = 0
 	}
 
-	init_message := Message{
-		Segment: &MessageSegment{
-			Init:             segment.Init.ID,
-			Timestamp:        ms,
-			ETP:              int(s.conn.GetMaxBandwidth() / 1024),
-			TcRate:           tcRate * 1024,
-			AvailabilityTime: int(time.Now().UnixMilli()),
-		},
-	}
 	/*
 
 			Segments on the Wire
@@ -463,11 +366,6 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 
 	*/
 
-	msgByte, err := datagram.GetMessage(init_message)
-	if err != nil {
-		return fmt.Errorf("failed to get segment header: %w", err)
-	}
-
 	segment_size := 0
 	box_count := 0
 	chunk_count := 0
@@ -476,19 +374,37 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 
 	last_moof_size := 0
 
-	id := uuid.New().String()[:8]
+	init_message := Message{
+		Segment: &MessageSegment{
+			Init:             segment.Init.ID,
+			Timestamp:        ms,
+			ETP:              int(s.conn.GetMaxBandwidth() / 1024),
+			TcRate:           tcRate * 1024,
+			AvailabilityTime: int(time.Now().UnixMilli()),
+		},
+	}
 
-	number, err := datagram.WriteSegment(msgByte, id, 0, 0)
+	segmentId := uuid.New().String()[:8]
+	chunkId := uuid.New().String()[:8]
+	count := 0
+
+	message, err := datagram.GetMessage(init_message)
 	if err != nil {
 		return fmt.Errorf("failed to write segment data: %w", err)
 	}
+	err = datagram.WriteSegment(message, segmentId, chunkId, count)
+	if err != nil {
+		return fmt.Errorf("failed to write segment data: %w", err)
+	}
+	count++
+
 	for {
+		chunkId = uuid.New().String()[:8]
 		// Get the next fragment
 		start := time.Now().UnixMilli()
 
 		buf, err := segment.Read(ctx)
 		if errors.Is(err, io.EOF) {
-			_, err = datagram.WriteSegment([]byte{}, id, number, 1)
 			break
 		} else if err != nil {
 			return fmt.Errorf("failed to read segment data: %w", err)
@@ -506,16 +422,34 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 				fmt.Printf("* chunk: %d size: %d time offset: %d\n", chunk_count, chunk_size, time.Now().UnixMilli()-start)
 			}
 		}
+		//if count == 5 || count == 7 {
+		//	count++
+		//	time.AfterFunc(50*time.Microsecond, func() {
+		//		datagram.WriteSegment(buf, segmentId, chunkId, 0, count)
+		//	})
+		//	continue
+		//}
 
-		n, err := datagram.WriteSegment(buf, id, number, 0)
+		// to generate chunk dropped
+		//if string(buf[4:8]) == "mdat" && (count == 6 || count == 7) {
+		//	count++
+		//	continue
+		//}
+		//if string(buf[4:8]) == "moof" && (count == 15) {
+		//	continue
+		//}
+		err = datagram.WriteSegment(buf, segmentId, chunkId, count)
 		if err != nil {
 			return fmt.Errorf("failed to write segment data: %w", err)
 		}
-		number += n
+
+		if string(buf[4:8]) == "mdat" || string(buf[4:8]) == "styp" {
+			count++
+		}
 	}
 
 	// for debug purposes
-	fmt.Printf("CATEGORY: %d\n", s.category)
+	//fmt.Printf("CATEGORY: %d\n", s.category)
 	fmt.Printf("* id: %s ts: %d etp: %d segment size: %d box count:%d chunk count: %d\n", init_message.Segment.Init, init_message.Segment.Timestamp, init_message.Segment.ETP, segment_size, box_count, chunk_count)
 
 	err = datagram.Close()
@@ -612,6 +546,7 @@ func (s *Session) writeSegment(ctx context.Context, segment *MediaSegment) (err 
 
 	last_moof_size := 0
 
+	count := 1
 	for {
 		// Get the next fragment
 		start := time.Now().UnixMilli()
@@ -636,12 +571,19 @@ func (s *Session) writeSegment(ctx context.Context, segment *MediaSegment) (err 
 			}
 		}
 
+		// to generate chunk dropped
+		//if count == 6 || count == 7 {
+		//	count++
+		//	continue
+		//}
+
 		// NOTE: This won't block because of our wrapper
 		_, err = stream.Write(buf)
 		if err != nil {
 			return fmt.Errorf("failed to write segment data: %w", err)
 		}
 
+		count++
 	}
 
 	// for debug purposes
