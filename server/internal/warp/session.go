@@ -405,6 +405,11 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 
 	err = datagram.Close()
 	if err != nil {
+		return fmt.Errorf("failed to close segemnt datagram: %w", err)
+	}
+
+	err = stream.Close()
+	if err != nil {
 		return fmt.Errorf("failed to close segemnt stream: %w", err)
 	}
 
@@ -569,7 +574,7 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 
 	err = datagram.Close()
 	if err != nil {
-		return fmt.Errorf("failed to close segemnt stream: %w", err)
+		return fmt.Errorf("failed to close segemnt datagram: %w", err)
 	}
 
 	return nil

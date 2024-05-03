@@ -24,9 +24,8 @@ export class FragmentedMessageHandler {
 		this.segmentStreams = new Map();
 	}
 
-	async handleStream(stream: ReadableStream, player: Player) {
-		let r = new StreamReader(stream.getReader())
-
+	// warp, styp, moof & mdat (I-frame)
+	async handleStream(r: StreamReader, player: Player) {
 		const segmentID = new TextDecoder('utf-8').decode(await r.bytes(8));
 		if (!this.segmentStreams.has(segmentID)) {
 			// console.log("STREAM CREATE ", segmentID)
@@ -34,10 +33,10 @@ export class FragmentedMessageHandler {
 		}
 
 		let count = 0
+		let moof: Uint8Array = new Uint8Array();
 		const controller = this.segmentStreams.get(segmentID)
 		while (controller !== undefined) {
-			// the header or "atom" type is already enqueued
-			if (count === 1) {
+			if (count === 4) {
 				this.isDelayed.set(segmentID, false)
 			}
 			if (await r.done()) {
@@ -47,8 +46,18 @@ export class FragmentedMessageHandler {
 
 			const raw = await r.peek(4)
 			const size = new DataView(raw.buffer, raw.byteOffset, raw.byteLength).getUint32(0)
-			controller.enqueue(await r.bytes(size))
-
+			
+			if (count < 2) {
+				controller.enqueue(await r.bytes(size))
+			} else if (count === 2) {
+				moof = await r.bytes(size)
+			} else if (count === 3) {
+				const mdat = await r.bytes(size)
+				const chunk = new Uint8Array(moof.length + mdat.length)
+				chunk.set(moof)
+				chunk.set(mdat, moof.length)
+				controller.enqueue(chunk)
+			}
 			count++
 		}
 	}
@@ -62,7 +71,8 @@ export class FragmentedMessageHandler {
 				controller.close();
 				}
 			});
-			player.handleStream(stream)
+			let r = new StreamReader(stream.getReader())
+			player.handleStream(r)
 		}  
 		const fragment = this.parseDatagram(datagram.slice(1));
 
@@ -93,7 +103,8 @@ export class FragmentedMessageHandler {
 		setTimeout(() => {
 			this.cleanup(segmentID);
 		}, 3000); 
-		player.handleStream(stream);
+		let r = new StreamReader(stream.getReader())
+		player.handleStream(r);
 	}
 
 	private storeFragment(fragment: MessageFragment) {

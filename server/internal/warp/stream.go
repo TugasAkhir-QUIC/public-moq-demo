@@ -103,6 +103,11 @@ func (s *Stream) WriteMessage(msg Message) (err error) {
 	var size [4]byte
 	binary.BigEndian.PutUint32(size[:], uint32(len(payload)+8))
 
+	_, err = s.Write([]byte{0})
+	if err != nil {
+		return fmt.Errorf("failed to write atom isHybrid: %w", err)
+	}
+
 	_, err = s.Write(size[:])
 	if err != nil {
 		return fmt.Errorf("failed to write size: %w", err)
@@ -125,6 +130,11 @@ func (s *Stream) WriteMessageAuto(segmentId string, msg Message) (err error) {
 	payload, err := json.Marshal(msg)
 	if err != nil {
 		return fmt.Errorf("failed to marshal message: %w", err)
+	}
+
+	_, err = s.Write([]byte{1})
+	if err != nil {
+		return fmt.Errorf("failed to write atom isHybrid: %w", err)
 	}
 
 	_, err = s.Write([]byte(segmentId))

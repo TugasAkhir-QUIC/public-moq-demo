@@ -148,6 +148,9 @@ export class Player {
 		this.categoryRef.addEventListener('change', this.changeCategory)
 		console.log('in start | url: %s', this.url);
 		const quic = new WebTransport(this.url)
+		quic.closed.then((info) => {
+			console.log("CONNECTION CLOSED:", info)
+		})
 		this.quic = quic.ready.then(() => { return quic });
 
 		// Create a unidirectional stream for all of our messages
@@ -156,8 +159,8 @@ export class Player {
 		})
 
 		// async functions
-		this.receiveStreams()
-		this.receiveDatagrams()
+		this.receiveStreams();
+		this.receiveDatagrams();
 
 		if (this.activeBWTestInterval > 0) {
 			setTimeout(() => {
@@ -544,11 +547,15 @@ export class Player {
 
 		const datagrams = q.datagrams.readable.getReader();
 
+		datagrams.closed.then((info) => {
+			console.log("DATAGRAMS CLOSED:", info)
+		})
+
 		while (true) {
 			++counter;
 			const result = await datagrams.read()
 			if (result) {
-				console.log("datagram masuk")
+				// console.log("datagram masuk")
 			}
 
 			if (result.done) {
@@ -570,11 +577,15 @@ export class Player {
 
 		const streams = q.incomingUnidirectionalStreams.getReader();
 
+		streams.closed.then((info) => {
+			console.log("STREAMS CLOSED:", info)
+		})
+
 		while (true) {
 			++counter;
 			const result = await streams.read();
 			if (result) {
-				console.log("stream masuk")
+				// console.log("stream masuk")
 			}
 			if (result.done) {
 				console.log("stream break")
@@ -582,18 +593,19 @@ export class Player {
 			}
 			const stream = result.value
 			
-			if (this.categoryRef.value === "2") {
-				console.log("stream masuk 2")
-				this.fragment.handleStream(stream, this)
+			let r = new StreamReader(stream.getReader())
+			const isHybrid = Boolean((await r.bytes(1)).at(0))
+			if (isHybrid) {
+				// console.log("stream masuk 2")
+				this.fragment.handleStream(r, this)
 				continue
 			}
 			
-			this.handleStream(stream) // don't await
+			this.handleStream(r) // don't await
 		}
 	}
 
-	async handleStream(stream: ReadableStream) {
-		let r = new StreamReader(stream.getReader())
+	async handleStream(r: StreamReader) {
 		while (true) {
 			const start = performance.now();
 
@@ -677,7 +689,7 @@ export class Player {
 		this.lastSegmentTimestamp = msg.timestamp;
 
 		// TODO: UNCOMMENT LOG
-		// console.log('msg: %o tcRate: %d serverBandwidth: %d', msg, this.tcRate, this.serverBandwidth)
+		console.log('msg: %o tcRate: %d serverBandwidth: %d', msg, this.tcRate, this.serverBandwidth)
 
 		const segment = new Segment(track.source, init, msg.timestamp)
 		// The track is responsible for flushing the segments in order
@@ -761,7 +773,7 @@ export class Player {
 						let filteredStats = [stat];
 						const val = this.computeTPut(filteredStats);
 						// TODO: UNCOMMENT LOG
-						// console.log('ifa calc', val, stat, this.throughputs.get('ifa'));
+						console.log('ifa calc', val, stat, this.throughputs.get('ifa'));
 						// if the value is an outlier (100 times more than the last measurement)
 						// discard it
 						const lastVal = (this.throughputs.get('ifa') || 0);
@@ -832,7 +844,7 @@ export class Player {
 	filterStats = (chunkStats: any[], threshold: number, thresholdType: string, lastTPut?: number) => {
 		let filteredStats = chunkStats.slice();
 		// TODO: UNCOMMENT LOG
-		// console.log('computeTPut | chunk count: %d thresholdType: %s threshold: %d', filteredStats.length, thresholdType, threshold);
+		console.log('computeTPut | chunk count: %d thresholdType: %s threshold: %d', filteredStats.length, thresholdType, threshold);
 
 		let zeroDurations = filteredStats.filter(a => a[2] === 0);
 		filteredStats = filteredStats.filter(a => a[2] > 0);
@@ -857,7 +869,7 @@ export class Player {
 		filteredStats = filteredStats.concat(zeroDurations);
 
 		// TODO: UNCOMMENT LOG
-		// console.log('computeTPut | after filtering: chunk count: %d', filteredStats.length);
+		console.log('computeTPut | after filtering: chunk count: %d', filteredStats.length);
 		return filteredStats;
 	}
 
