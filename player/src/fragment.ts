@@ -26,6 +26,13 @@ export class FragmentedMessageHandler {
 
 	// warp, styp, moof & mdat (I-frame)
 	async handleStream(r: StreamReader, player: Player) {
+		const isHybrid = Boolean((await r.bytes(1)).at(0))
+		if (!isHybrid) {
+			// console.log("stream masuk 2")
+			player.handleStream(r)
+			return
+		}
+		
 		const segmentID = new TextDecoder('utf-8').decode(await r.bytes(8));
 		if (!this.segmentStreams.has(segmentID)) {
 			// console.log("STREAM CREATE ", segmentID)
@@ -36,7 +43,7 @@ export class FragmentedMessageHandler {
 		let moof: Uint8Array = new Uint8Array();
 		const controller = this.segmentStreams.get(segmentID)
 		while (controller !== undefined) {
-			if (count === 4) {
+			if (count === 4) { // 1 or 4
 				this.isDelayed.set(segmentID, false)
 			}
 			if (await r.done()) {
@@ -63,7 +70,7 @@ export class FragmentedMessageHandler {
 	}
 
 	async handleDatagram(datagram: Uint8Array, player: Player) {
-		const isSegment = datagram.at(0)
+		const isSegment = Boolean(datagram.at(0))
 		if (!isSegment) {
 			const stream = new ReadableStream({
 				start(controller) {
@@ -73,6 +80,7 @@ export class FragmentedMessageHandler {
 			});
 			let r = new StreamReader(stream.getReader())
 			player.handleStream(r)
+			return
 		}  
 		const fragment = this.parseDatagram(datagram.slice(1));
 
@@ -102,7 +110,7 @@ export class FragmentedMessageHandler {
 		});
 		setTimeout(() => {
 			this.cleanup(segmentID);
-		}, 3000); 
+		}, 2100); // 3000 (?)
 		let r = new StreamReader(stream.getReader())
 		player.handleStream(r);
 	}

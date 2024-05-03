@@ -592,16 +592,9 @@ export class Player {
 				break
 			}
 			const stream = result.value
-			
 			let r = new StreamReader(stream.getReader())
-			const isHybrid = Boolean((await r.bytes(1)).at(0))
-			if (isHybrid) {
-				// console.log("stream masuk 2")
-				this.fragment.handleStream(r, this)
-				continue
-			}
 			
-			this.handleStream(r) // don't await
+			this.fragment.handleStream(r, this) // don't await
 		}
 	}
 
