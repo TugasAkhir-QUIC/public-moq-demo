@@ -196,6 +196,8 @@ export class Player {
 			sendMessage = true;
 		} else if (currentCategory === '1') {
 			sendMessage = true;
+		} else if (currentCategory === '2') {
+			sendMessage = true;
 		}
 		//change to int of currentCategory
 		let numCategory = parseInt(currentCategory);
@@ -546,7 +548,7 @@ export class Player {
 			++counter;
 			const result = await datagrams.read()
 			if (result) {
-				// console.log("datagram masuk")
+				console.log("datagram masuk")
 			}
 
 			if (result.done) break
@@ -574,7 +576,13 @@ export class Player {
 			if (result.done) break
 
 			const stream = result.value
-			console.log(stream)
+			
+			if (this.categoryRef.value === "2") {
+				console.log("stream masuk 2")
+				this.fragment.handleStream(stream, this)
+				continue
+			}
+			
 			this.handleStream(stream) // don't await
 		}
 	}

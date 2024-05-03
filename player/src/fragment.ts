@@ -1,5 +1,6 @@
 import { Player } from "./player";
 import { IQueue, Queue } from "./queue";
+import { StreamReader, StreamWriter } from "./stream"
 
 type MessageFragment = {
 	segmentID: string;
@@ -23,6 +24,35 @@ export class FragmentedMessageHandler {
 		this.segmentStreams = new Map();
 	}
 
+	async handleStream(stream: ReadableStream, player: Player) {
+		let r = new StreamReader(stream.getReader())
+
+		const segmentID = new TextDecoder('utf-8').decode(await r.bytes(8));
+		if (!this.segmentStreams.has(segmentID)) {
+			// console.log("STREAM CREATE ", segmentID)
+			this.initializeStream(segmentID, player);
+		}
+
+		let count = 0
+		const controller = this.segmentStreams.get(segmentID)
+		while (controller !== undefined) {
+			// the header or "atom" type is already enqueued
+			if (count === 1) {
+				this.isDelayed.set(segmentID, false)
+			}
+			if (await r.done()) {
+				console.log('end of stream')
+				break;
+			}
+
+			const raw = await r.peek(4)
+			const size = new DataView(raw.buffer, raw.byteOffset, raw.byteLength).getUint32(0)
+			controller.enqueue(await r.bytes(size))
+
+			count++
+		}
+	}
+
 	async handleDatagram(datagram: Uint8Array, player: Player) {
 		const isSegment = datagram.at(0)
 		if (!isSegment) {
@@ -37,7 +67,7 @@ export class FragmentedMessageHandler {
 		const fragment = this.parseDatagram(datagram.slice(1));
 
 		if (!this.segmentStreams.has(fragment.segmentID)) {
-			// console.log("CREATE ", fragment.segmentID)
+			// console.log("DATAGRAM CREATE ", fragment.segmentID)
 			this.initializeStream(fragment.segmentID, player);
 		}
 
@@ -114,7 +144,6 @@ export class FragmentedMessageHandler {
 	}
 
 	private cleanup(segmentID: string) {
-		// this.flush(segmentID);
 		this.segmentStreams.get(segmentID)?.close();
 		this.segmentStreams.delete(segmentID);
 		this.isDelayed.delete(segmentID);

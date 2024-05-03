@@ -121,6 +121,38 @@ func (s *Stream) WriteMessage(msg Message) (err error) {
 	return nil
 }
 
+func (s *Stream) WriteMessageAuto(segmentId string, msg Message) (err error) {
+	payload, err := json.Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal message: %w", err)
+	}
+
+	_, err = s.Write([]byte(segmentId))
+	if err != nil {
+		return fmt.Errorf("failed to write segmentId: %w", err)
+	}
+
+	var size [4]byte
+	binary.BigEndian.PutUint32(size[:], uint32(len(payload)+8))
+
+	_, err = s.Write(size[:])
+	if err != nil {
+		return fmt.Errorf("failed to write size: %w", err)
+	}
+
+	_, err = s.Write([]byte("warp"))
+	if err != nil {
+		return fmt.Errorf("failed to write atom header: %w", err)
+	}
+
+	_, err = s.Write(payload)
+	if err != nil {
+		return fmt.Errorf("failed to write payload: %w", err)
+	}
+
+	return nil
+}
+
 func (s *Stream) WriteCancel(code webtransport.StreamErrorCode) {
 	s.inner.CancelWrite(code)
 }
