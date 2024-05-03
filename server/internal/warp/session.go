@@ -202,7 +202,7 @@ func (s *Session) runAudio(ctx context.Context) (err error) {
 				return fmt.Errorf("failed to write segment datagram: %w", err)
 			}
 		} else if s.category == 2 {
-			err = s.writeSegmentAuto(ctx, segment)
+			err = s.writeSegmentHybrid(ctx, segment)
 			if err != nil {
 				return fmt.Errorf("failed to write segment datagram: %w", err)
 			}
@@ -248,7 +248,7 @@ func (s *Session) runVideo(ctx context.Context) (err error) {
 				return fmt.Errorf("failed to write segment datagram: %w", err)
 			}
 		} else if s.category == 2 {
-			err = s.writeSegmentAuto(ctx, segment)
+			err = s.writeSegmentHybrid(ctx, segment)
 			if err != nil {
 				return fmt.Errorf("failed to write segment datagram: %w", err)
 			}
@@ -291,7 +291,7 @@ func (s *Session) writeInit(ctx context.Context, init *MediaInit) (err error) {
 	return nil
 }
 
-func (s *Session) writeSegmentAuto(ctx context.Context, segment *MediaSegment) (err error) {
+func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment) (err error) {
 	// Wrap the stream in an object that buffers writes instead of blocking.
 	datagram := NewDatagram(s.inner)
 	s.streams.Add(datagram.Run)
@@ -376,6 +376,9 @@ func (s *Session) writeSegmentAuto(ctx context.Context, segment *MediaSegment) (
 			_, err = stream.Write(buf)
 			if err != nil {
 				return fmt.Errorf("failed to write segment data: %w", err)
+			}
+			if string(buf[4:8]) == "mdat" || string(buf[4:8]) == "styp" {
+				count++
 			}
 			continue
 		}

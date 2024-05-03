@@ -551,7 +551,10 @@ export class Player {
 				console.log("datagram masuk")
 			}
 
-			if (result.done) break
+			if (result.done) {
+				console.log("datagram break")
+				break
+			}
 
 			this.fragment.handleDatagram(result.value, this)
 		}
@@ -573,8 +576,10 @@ export class Player {
 			if (result) {
 				console.log("stream masuk")
 			}
-			if (result.done) break
-
+			if (result.done) {
+				console.log("stream break")
+				break
+			}
 			const stream = result.value
 			
 			if (this.categoryRef.value === "2") {
@@ -672,7 +677,7 @@ export class Player {
 		this.lastSegmentTimestamp = msg.timestamp;
 
 		// TODO: UNCOMMENT LOG
-		console.log('msg: %o tcRate: %d serverBandwidth: %d', msg, this.tcRate, this.serverBandwidth)
+		// console.log('msg: %o tcRate: %d serverBandwidth: %d', msg, this.tcRate, this.serverBandwidth)
 
 		const segment = new Segment(track.source, init, msg.timestamp)
 		// The track is responsible for flushing the segments in order
@@ -756,7 +761,7 @@ export class Player {
 						let filteredStats = [stat];
 						const val = this.computeTPut(filteredStats);
 						// TODO: UNCOMMENT LOG
-						console.log('ifa calc', val, stat, this.throughputs.get('ifa'));
+						// console.log('ifa calc', val, stat, this.throughputs.get('ifa'));
 						// if the value is an outlier (100 times more than the last measurement)
 						// discard it
 						const lastVal = (this.throughputs.get('ifa') || 0);
@@ -827,7 +832,7 @@ export class Player {
 	filterStats = (chunkStats: any[], threshold: number, thresholdType: string, lastTPut?: number) => {
 		let filteredStats = chunkStats.slice();
 		// TODO: UNCOMMENT LOG
-		console.log('computeTPut | chunk count: %d thresholdType: %s threshold: %d', filteredStats.length, thresholdType, threshold);
+		// console.log('computeTPut | chunk count: %d thresholdType: %s threshold: %d', filteredStats.length, thresholdType, threshold);
 
 		let zeroDurations = filteredStats.filter(a => a[2] === 0);
 		filteredStats = filteredStats.filter(a => a[2] > 0);
@@ -852,7 +857,7 @@ export class Player {
 		filteredStats = filteredStats.concat(zeroDurations);
 
 		// TODO: UNCOMMENT LOG
-		console.log('computeTPut | after filtering: chunk count: %d', filteredStats.length);
+		// console.log('computeTPut | after filtering: chunk count: %d', filteredStats.length);
 		return filteredStats;
 	}
 
