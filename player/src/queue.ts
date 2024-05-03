@@ -1,3 +1,4 @@
+// source: https://dev.to/glebirovich/typescript-data-structures-stack-and-queue-hld
 export interface IQueue<T> {
     enqueue(item: T): void;
     dequeue(): T | undefined;
