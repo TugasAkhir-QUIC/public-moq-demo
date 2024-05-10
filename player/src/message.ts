@@ -15,7 +15,7 @@ export interface MessageSegment {
 	etp: number // estimated throughput in Kbps / CTA 5006
 	tc_rate: number // applied tc netem rate in Mbps
 	at: number // availability time / CTA 5006
-	// TODO track would be nice
+	client_addr: string // local address, the sessions current IP address
 }
 
 export interface MessagePing {

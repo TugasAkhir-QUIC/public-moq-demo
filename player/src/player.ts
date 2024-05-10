@@ -11,7 +11,7 @@ import { FragmentedMessageHandler } from "./fragment"
 
 export class Player {
 	mediaSource: MediaSource;
-
+	ipaddr: string;
 	init: Map<string, InitParser>;
 	audio: Track;
 	video: Track;
@@ -93,7 +93,7 @@ export class Player {
 
 		this.mediaSource = new MediaSource()
 		this.vidRef.src = URL.createObjectURL(this.mediaSource)
-
+		this.ipaddr = "";
 		this.init = new Map()
 		this.audio = new Track(new Source(this.mediaSource));
 		this.video = new Track(new Source(this.mediaSource));
@@ -684,6 +684,11 @@ export class Player {
 		// TODO: UNCOMMENT LOG
 		console.log('msg: %o tcRate: %d serverBandwidth: %d', msg, this.tcRate, this.serverBandwidth)
 
+		//single check to update IP Address for metric purposes
+		if (this.ipaddr === "") {
+			this.ipaddr = msg.client_addr;
+		}
+
 		const segment = new Segment(track.source, init, msg.timestamp)
 		// The track is responsible for flushing the segments in order
 		track.add(segment)
@@ -744,6 +749,7 @@ export class Player {
 					dbStore.addLogEntry({
 						testId: this.testId,
 						segmentId: msg.init,
+						address: this.ipaddr,
 						no: chunkCounter,
 						chunkSize,
 						chunkDownloadDuration,
