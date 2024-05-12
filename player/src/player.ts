@@ -56,7 +56,6 @@ export class Player {
 	activeBWTestResult: number;
 	activeBWTestInterval: number;
 	lastActiveBWTestResult: number;
-
 	chunkStats: any[] = [];
 	totalChunkCount = 0; // video track chunk count
 
@@ -121,6 +120,7 @@ export class Player {
 
 		try {
 			console.log('initing db');
+			this.timeRef = performance.now();
 			if (!await dbStore.init()) {
 				console.log('db already inited');
 			} else {
@@ -792,6 +792,11 @@ export class Player {
 						}
 
 					}
+					//chunkThroughput
+					const chunkTPut = this.computeChunkTPut([stat]);
+					if (chunkTPut > 0) {
+						this.throughputs.set('chunk', chunkTPut);
+					}
 				}
 			}
 			totalSegmentSize += size;
@@ -886,6 +891,20 @@ export class Player {
 		return totalSize * 8 * 1000 / totalDuration;
 	};
 
+	computeChunkTPut = (stats: any[]) => {
+		let totalSize = 0;
+		let totalDuration = 0;
+		stats.forEach((arr, i) => {
+			const size = arr[1];
+			const downloadDurationOfChunk = arr[2];
+			if (size > 0 && downloadDurationOfChunk > 0) {
+				totalSize += size;
+				totalDuration += downloadDurationOfChunk;
+			}
+		});
+		return totalSize * 8 * 1000 / totalDuration;
+	}
+
 	updateStats = () => {
 		const audioFiller = this.statsRef.querySelector('.audio.buffer .fill') as HTMLElement;
 		const audioBufferDurationEl = this.statsRef.querySelector('.audio.label>.seconds') as HTMLElement;
@@ -903,12 +922,14 @@ export class Player {
 
 		const bw = document.querySelector('#stats .server_bw') as HTMLDivElement;
 		const bw_swma_threshold = document.querySelector('#stats .swma_threshold') as HTMLDivElement;
+		const chunk_throughput = document.querySelector('#stats .chunk_throughput') as HTMLDivElement;
 		const bw_active_bw = document.querySelector('#stats .active_bw') as HTMLDivElement;
 
 
 		if (bw) {
 			bw.innerText = formatBits(this.serverBandwidth, 1).toString();
 			bw_swma_threshold.innerText = formatBits(this.throughputs.get('swma') || 0, 1).toString() + ' / ' + formatBits(this.throughputs.get('ifa') || 0, 1).toString();
+			chunk_throughput.innerText = formatBits(this.throughputs.get("chunk") || 0, 1).toString();
 			bw_active_bw.innerText = formatBits(this.lastActiveBWTestResult, 1).toString();
 		}
 	}
