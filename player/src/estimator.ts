@@ -106,7 +106,7 @@ const computeByTestId = async (testId: string) => {
 const filterStats = (chunkStats: any[], threshold: number, thresholdType: string, lastTPut?: number) => {
     // filter out the ones with zero download duration
     let filteredStats = chunkStats.slice().filter(a => a[1] > 0);
-    console.log('computeTPut | chunk count: %d thresholdType: %s threshold: %d', filteredStats.length, thresholdType, threshold);
+    //console.log('computeTPut | chunk count: %d thresholdType: %s threshold: %d', filteredStats.length, thresholdType, threshold);
 
     if (threshold > 0 && threshold < 100) {
         // sort chunk by download rate, in descending order
@@ -135,7 +135,7 @@ const filterStats = (chunkStats: any[], threshold: number, thresholdType: string
         });
     }
 
-    console.log('computeTPut | after filtering: chunk count: %d', filteredStats.length);
+    //console.log('computeTPut | after filtering: chunk count: %d', filteredStats.length);
     return filteredStats;
 }
 

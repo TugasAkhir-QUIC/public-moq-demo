@@ -21,7 +21,7 @@ export class Player {
 	url: string;
 	started?: boolean;
 	paused?: boolean;
-
+	totalSizeProcessed: number;
 	// References to elements in the DOM
 	vidRef: HTMLVideoElement; // The video element itself
 	statsRef: HTMLElement; // The stats div
@@ -76,6 +76,7 @@ export class Player {
 		this.categoryRef = props.categoryRef;
 		this.throughputs = new Map();
 		this.throttleCount = 0;
+		this.totalSizeProcessed = 0;
 		this.url = props.url;
 		this.activeBWTestInterval = props.activeBWTestInterval * 1000 || 0;
 
@@ -120,7 +121,6 @@ export class Player {
 
 		try {
 			console.log('initing db');
-			this.timeRef = performance.now();
 			if (!await dbStore.init()) {
 				console.log('db already inited');
 			} else {
@@ -157,7 +157,7 @@ export class Player {
 		this.api = this.quic.then((q) => {
 			return q.createUnidirectionalStream()
 		})
-
+		this.timeRef = performance.now();
 		// async functions
 		this.receiveStreams();
 		this.receiveDatagrams();
@@ -705,14 +705,14 @@ export class Player {
 
 		let totalSegmentSize = 0;
 		const segmentDownloadStart = performance.now()
-
+		
 		let chunkCounter = 0;
 		let isVideoSegment = init.info.videoTracks.length > 0;
 		let lastMoofSize = 0;
 		let lastMoofStartTime = 0;
 		let lastMoofDownloadDuration = 0;
 		let lastMoofClockTime = 0;
-
+		let totalChunkSize = 0;
 		// One day I'll figure it out; until then read one top-level atom at a time
 		let count = 1
 		while (true) {
@@ -738,11 +738,16 @@ export class Player {
 					lastMoofSize = size;
 					lastMoofStartTime = boxStartOffset;
 					lastMoofDownloadDuration = performance.now() - lastMoofStartTime;
+					// console.log("MOOF startTime", lastMoofStartTime)
+					// console.log(count, "moof")
 					lastMoofClockTime = Date.now();
 				} else if (boxType === 'mdat') {
-					const chunkDownloadDuration = performance.now() - lastMoofStartTime;
+					const chunkDownloadDuration = performance.now() - boxStartOffset;
+					// console.log("TIME TO DOWNLOAD 1 MOOF MDAT CHUNK ", chunkDownloadDuration)
 					const chunkSize = size + lastMoofSize; // bytes
+					totalChunkSize += chunkSize;
 					const chunkLatency = Math.round(lastMoofClockTime - msg.at);
+					// console.log(count, "mdat")
 
 					++this.totalChunkCount;
 
@@ -770,6 +775,8 @@ export class Player {
 
 					if (chunkCounter === 1) { // TODO: IFRAME
 						let filteredStats = [stat];
+						// console.log("chunk 1")
+						// console.log(filteredStats);
 						const val = this.computeTPut(filteredStats);
 						// TODO: UNCOMMENT LOG
 						console.log('ifa calc', val, stat, this.throughputs.get('ifa'));
@@ -793,20 +800,31 @@ export class Player {
 
 					}
 					//chunkThroughput
-					const chunkTPut = this.computeChunkTPut([stat]);
-					if (chunkTPut > 0) {
-						this.throughputs.set('chunk', chunkTPut);
-					}
+					// const chunkTPut = this.computeChunkTPut([stat], segmentDownloadStart);
+					// //console.log("this is STATS : " + [stat]);
+					// if (chunkTPut > 0) {
+					// 	this.throughputs.set('chunk', chunkTPut);
+					// }
 				}
+				count++
 			}
+			
 			totalSegmentSize += size;
+			this.totalSizeProcessed += size;
+			//ComputeSegmentThroughput
+			const segmentTPut = this.computeSegmentTPut(this.totalSizeProcessed, performance.now());
+			if (segmentTPut > 0) {
+				this.throughputs.set('chunk', segmentTPut);
+			}
+			// console.log("total segment size", totalSegmentSize)
+			// console.log("player total size processed", this.totalSizeProcessed)
 
 			// if (count === 5 || count === 15) {
 			// 	count++
 			// 	continue
 			// }
 			segment.push(atom)
-			count++
+			// count++
 
 			track.flush() // Flushes if the active segment has new samples
 		}
@@ -814,7 +832,13 @@ export class Player {
 		segment.finish()
 
 		const segmentFinish = performance.now() - segmentDownloadStart;
-
+		// let totalSegmentinBits = totalSegmentSize * 8;
+		// console.log('total segment size: %d', totalSegmentinBits);
+		// console.log('segment finish duration: %d', segmentFinish/1000);
+		// let segmentFinishSeconds = segmentFinish / 1000;
+		// console.log("total chunk size: ", totalChunkSize)
+		// console.log('segment finish duration: %d', segmentFinishSeconds);
+		// this.throughputs.set('chunk', totalSegmentinBits/segmentFinishSeconds);
 		if (isVideoSegment) {
 			this.logFunc('-----------------------------------------------------')
 			this.logFunc('segment chunk length: ' + chunkCounter);
@@ -873,7 +897,7 @@ export class Player {
 		filteredStats = filteredStats.concat(zeroDurations);
 
 		// TODO: UNCOMMENT LOG
-		console.log('computeTPut | after filtering: chunk count: %d', filteredStats.length);
+		//console.log('computeTPut | after filtering: chunk count: %d', filteredStats.length);
 		return filteredStats;
 	}
 
@@ -891,18 +915,22 @@ export class Player {
 		return totalSize * 8 * 1000 / totalDuration;
 	};
 
-	computeChunkTPut = (stats: any[]) => {
+	computeChunkTPut = (stats: any[], timestart: number) => {
 		let totalSize = 0;
-		let totalDuration = 0;
 		stats.forEach((arr, i) => {
 			const size = arr[1];
-			const downloadDurationOfChunk = arr[2];
-			if (size > 0 && downloadDurationOfChunk > 0) {
+			if (size > 0) {
 				totalSize += size;
-				totalDuration += downloadDurationOfChunk;
 			}
 		});
-		return totalSize * 8 * 1000 / totalDuration;
+		return totalSize * 8 * 1000 / (performance.now() - timestart);
+	}
+
+	computeSegmentTPut = (totalSize: number, timestart: number) => {
+		// console.log("timestart: ", timestart)
+		// console.log("timeRef: ", this.timeRef)
+		return totalSize * 8 * 1000 / (timestart - this.timeRef);
+	
 	}
 
 	updateStats = () => {
@@ -923,6 +951,8 @@ export class Player {
 		const bw = document.querySelector('#stats .server_bw') as HTMLDivElement;
 		const bw_swma_threshold = document.querySelector('#stats .swma_threshold') as HTMLDivElement;
 		const chunk_throughput = document.querySelector('#stats .chunk_throughput') as HTMLDivElement;
+		const chunk_volume = document.querySelector('#stats .total_chunk_volume') as HTMLDivElement;
+		const elapsed_time = document.querySelector('#stats .elapsed_time') as HTMLDivElement;
 		const bw_active_bw = document.querySelector('#stats .active_bw') as HTMLDivElement;
 
 
@@ -930,6 +960,8 @@ export class Player {
 			bw.innerText = formatBits(this.serverBandwidth, 1).toString();
 			bw_swma_threshold.innerText = formatBits(this.throughputs.get('swma') || 0, 1).toString() + ' / ' + formatBits(this.throughputs.get('ifa') || 0, 1).toString();
 			chunk_throughput.innerText = formatBits(this.throughputs.get("chunk") || 0, 1).toString();
+			chunk_volume.innerText = formatBits(this.totalSizeProcessed * 8, 1).toString();
+			elapsed_time.innerText = ((performance.now() - this.timeRef)/1000).toString();
 			bw_active_bw.innerText = formatBits(this.lastActiveBWTestResult, 1).toString();
 		}
 	}
