@@ -772,7 +772,7 @@ export class Player {
 
 					const stat = [chunkCounter, chunkSize, chunkDownloadDuration, lastMoofDownloadDuration, chunkDownloadDuration > 0 ? (chunkSize * 8 * 1000 / chunkDownloadDuration) : 0, chunkLatency, msg.timestamp];
 					this.chunkStats.push(stat);
-
+					//MAYBE REMOVE???
 					if (chunkCounter === 1) { // TODO: IFRAME
 						let filteredStats = [stat];
 						// console.log("chunk 1")
