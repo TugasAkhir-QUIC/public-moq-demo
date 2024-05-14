@@ -51,6 +51,7 @@
                 <option value="0" selected>Stream</option>
                 <option value="1">Datagram</option>
                 <option value="2">Hybrid</option>
+                <option value="3">Auto</option>
               </select>
             </div>
             <a
@@ -79,11 +80,15 @@
 
             <label>Server Reported Bandwidth</label>
             <div class="server_bw"></div>
-            <label>SWMA / IFA</label>
+            <label>QUIC Stream: SWMA / IFA</label>
             <div class="swma_threshold"></div>
-            <label>Chunk Throughput</label>
+            <label>Stream: Chunk Latency</label>
+            <div class="stream_chunk_latency"></div>
+            <label>Datagram: Chunk Latency</label>
+            <div class="datagram_chunk_latency"></div>
+            <label>Overall Chunk Throughput</label>
             <div class="chunk_throughput"></div>
-            <label>Chunk Volume</label>
+            <label>Total Video Chunk Volume</label>
             <div class="total_chunk_volume"></div>
             <label>Time Elapsed</label>
             <div class="elapsed_time"></div>

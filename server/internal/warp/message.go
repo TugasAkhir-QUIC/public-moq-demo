@@ -8,6 +8,7 @@ type Message struct {
 	Debug    *MessageDebug    `json:"debug,omitempty"`
 	Pref     *MessagePref     `json:"x-pref,omitempty"`
 	Category *MessageCategory `json:"x-category,omitempty"`
+	Auto     *MessageAuto     `json:"x-auto,omitempty"`
 }
 
 type MessageInit struct {
@@ -41,4 +42,7 @@ type MessagePref struct {
 }
 type MessageCategory struct {
 	Category int `json:"category"`
+}
+type MessageAuto struct {
+	Auto bool `json:"auto"`
 }

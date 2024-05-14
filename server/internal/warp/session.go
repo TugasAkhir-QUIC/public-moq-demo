@@ -41,6 +41,7 @@ type Session struct {
 	continueStreaming bool
 	//determines whether it is Stream or Datagram
 	category        int
+	isAuto          bool
 	audioTimeOffset time.Duration
 	videoTimeOffset time.Duration
 }
@@ -53,7 +54,8 @@ func NewSession(connection quic.Connection, session *webtransport.Session, media
 	s.media = media
 	s.continueStreaming = true
 	s.server.continueStreaming = true
-	s.category = 1
+	s.category = 0
+	s.isAuto = false
 	return s, nil
 }
 
@@ -143,6 +145,10 @@ func (s *Session) handleStream(ctx context.Context, stream webtransport.ReceiveS
 
 		if msg.Category != nil {
 			s.setSwitch(msg.Category)
+		}
+
+		if msg.Auto != nil {
+			s.setAuto(msg.Auto)
 		}
 
 		if msg.Pref != nil {
@@ -408,7 +414,7 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 	// HYBRID SEGMENT WRITTEN
 	//fmt.Printf("CATEGORY: %d\n", s.category)
 	fmt.Printf("* id: %s ts: %d etp: %d segment size: %d box count:%d chunk count: %d\n", init_message.Segment.Init, init_message.Segment.Timestamp, init_message.Segment.ETP, segment_size, box_count, chunk_count)
-	logtoCSV("HYBRID", init_message.Segment.Timestamp, segment_size, s.inner.LocalAddr().String(), s.inner.RemoteAddr().String())
+	logtoCSV("HYBRID", init_message.Segment.Timestamp, segment_size, s.inner.LocalAddr().String(), s.inner.RemoteAddr().String(), s.isAuto)
 	err = datagram.Close()
 	if err != nil {
 		return fmt.Errorf("failed to close segemnt datagram: %w", err)
@@ -579,7 +585,8 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 	//fmt.Printf("CATEGORY: %d\n", s.category)
 	fmt.Printf("DATAGRAM SEGMENT WRITTEN || ")
 	fmt.Printf("* id: %s ts: %d etp: %d segment size: %d box count:%d chunk count: %d\n", init_message.Segment.Init, init_message.Segment.Timestamp, init_message.Segment.ETP, segment_size, box_count, chunk_count)
-	logtoCSV("DATAGRAM", init_message.Segment.Timestamp, segment_size, s.inner.LocalAddr().String(), s.inner.RemoteAddr().String())
+
+	logtoCSV("DATAGRAM", init_message.Segment.Timestamp, segment_size, s.inner.LocalAddr().String(), s.inner.RemoteAddr().String(), s.isAuto)
 	err = datagram.Close()
 	if err != nil {
 		return fmt.Errorf("failed to close segemnt datagram: %w", err)
@@ -719,7 +726,7 @@ func (s *Session) writeSegment(ctx context.Context, segment *MediaSegment) (err 
 	// STREAM SEGMENT WRITTEN
 	//fmt.Printf("STREAM SEGMENT WRITTEN || ")
 	fmt.Printf("* id: %s ts: %d etp: %d segment size: %d box count:%d chunk count: %d\n", init_message.Segment.Init, init_message.Segment.Timestamp, init_message.Segment.ETP, segment_size, box_count, chunk_count)
-	logtoCSV("STREAM", init_message.Segment.Timestamp, segment_size, s.inner.LocalAddr().String(), s.inner.RemoteAddr().String())
+	logtoCSV("STREAM", init_message.Segment.Timestamp, segment_size, s.inner.LocalAddr().String(), s.inner.RemoteAddr().String(), s.isAuto)
 	err = stream.Close()
 	if err != nil {
 		return fmt.Errorf("failed to close segemnt stream: %w", err)
@@ -744,6 +751,10 @@ func (s *Session) setDebug(msg *MessageDebug) {
 
 func (s *Session) setSwitch(msg *MessageCategory) {
 	s.category = msg.Category
+}
+
+func (s *Session) setAuto(msg *MessageAuto) {
+	s.isAuto = msg.Auto
 }
 
 func (s *Session) setPref(msg *MessagePref) {
@@ -777,10 +788,15 @@ func (s *Session) sendPong(msg *MessagePing, ctx context.Context) (err error) {
 }
 
 // External Logging Function to ../logs
-func logtoCSV(quicType string, timeStamp int, segmentSize int, serverAddr string, clientAddr string) {
+func logtoCSV(quicType string, timeStamp int, segmentSize int, serverAddr string, clientAddr string, isAuto bool) {
 	now := time.Now()
 	baseDir := filepath.Join("internal", "logs")
-	fileName := filepath.Join(baseDir, fmt.Sprintf("%s-%d-%02d-%02d-%02d.csv", quicType, now.Year(), now.Month(), now.Day(), now.Hour()))
+	var fileName string
+	if isAuto {
+		fileName = filepath.Join(baseDir, fmt.Sprintf("%s-%d-%02d-%02d-%02d.csv", "AUTO", now.Year(), now.Month(), now.Day(), now.Hour()))
+	} else {
+		fileName = filepath.Join(baseDir, fmt.Sprintf("%s-%d-%02d-%02d-%02d.csv", quicType, now.Year(), now.Month(), now.Day(), now.Hour()))
+	}
 	if _, err := os.Stat(fileName); os.IsNotExist(err) {
 		if err := createCSVlog(fileName); err != nil {
 			log.Printf("Error creating CSV log: %v", err)

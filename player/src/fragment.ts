@@ -12,6 +12,7 @@ type MessageFragment = {
 };
 
 export class FragmentedMessageHandler {
+	//Add Parameter for StatsRef to update stats and throughput map of player.
 	private fragmentBuffers: Map<string, Uint8Array[]>;
 	private chunkBuffers: Map<string, IQueue<Uint8Array>>;
 	private isDelayed: Map<string, boolean>;

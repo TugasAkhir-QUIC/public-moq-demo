@@ -63,7 +63,7 @@ export class Player {
 	testId: string;
 
 	fragment: FragmentedMessageHandler
-
+	isAuto: boolean
 	constructor(props: any) {
 		this.vidRef = props.vid
 		this.statsRef = props.stats
@@ -97,7 +97,7 @@ export class Player {
 		this.init = new Map()
 		this.audio = new Track(new Source(this.mediaSource));
 		this.video = new Track(new Source(this.mediaSource));
-
+		this.isAuto = false;
 		this.fragment = new FragmentedMessageHandler();
 
 		if (props.autoStart) {
@@ -193,28 +193,59 @@ export class Player {
 	categoryChange = () => {
 		console.log('in categoryChange | category: %s', this.categoryRef.value);
 		let currentCategory = this.categoryRef.value;
+		let categoryUsed = '';
+		if (currentCategory != '3'){
+			categoryUsed = currentCategory
+		}
 		let sendMessage = false;
-		//check if category is 0 for streams, 1 for datagrams
+		let sendAuto = false;
+		//check if category is 0 for streams, 1 for datagrams, 2 Partially Reliable, 3 Auto switch between streams and datagrams.
 		if (currentCategory === '0') {
 			sendMessage = true;
+			sendAuto = false;
 		} else if (currentCategory === '1') {
 			sendMessage = true;
+			sendAuto = false;
 		} else if (currentCategory === '2') {
 			sendMessage = true;
+			sendAuto = false;
+		} else if(currentCategory === '3') {
+			sendMessage = true;
+			sendAuto = true;
 		}
+		this.isAuto = sendAuto;
 		//change to int of currentCategory
-		let numCategory = parseInt(currentCategory);
+		let numCategory = parseInt(categoryUsed);
 
 		if (sendMessage) {
-			this.sendMessage({
-				"x-category": {
-					category: numCategory,
-				}
-			})
-		
+			//NOTIFIES SERVER THAT CLIENT IS USING AUTO MODE
+			if(sendAuto){
+				this.sendMessage({
+					"x-auto": {
+						auto: sendAuto,
+					}
+				})
+			} else{
+				this.sendMessage({
+					"x-category": {
+						category: numCategory,
+					},
+					"x-auto": {
+						auto: sendAuto
+					}
+				})
+
+			}
 		}
 	};
-
+	//Used only for auto in handleSegment
+	changeQuicType = (categoryNum: number) => {
+		this.sendMessage({
+			"x-category": {
+				category: categoryNum,
+			},
+		})
+	};
 
 	pauseOrResume = (pause?: boolean) => {
 		console.log('in pauseOrResume | paused: %s pause: %s', this.paused, pause);
@@ -830,7 +861,10 @@ export class Player {
 		}
 
 		segment.finish()
-
+		//judgement to change from streams to datagrams vice versa if auto is True;
+		if (this.isAuto){
+			//judgement of average bandwidth, average latency
+		}
 		const segmentFinish = performance.now() - segmentDownloadStart;
 		// let totalSegmentinBits = totalSegmentSize * 8;
 		// console.log('total segment size: %d', totalSegmentinBits);
