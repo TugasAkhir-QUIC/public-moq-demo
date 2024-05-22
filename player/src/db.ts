@@ -1,4 +1,5 @@
-const DB_VERSION = 8;
+//NOTE: CHANGE VERSION WHEN ADDING NEW OBJECT STORES
+const DB_VERSION = 10;
 let db: IDBDatabase;
 let status: 'none' | 'pending' | 'inited' = 'none';
 
@@ -44,7 +45,7 @@ const init = (): Promise<boolean> => {
 
                 // Create an objectStore for this database
                 try {
-                    let testStore, logStore, resultStore;
+                    let testStore, logStore, resultStore, segmentLogStore;
                     if (db.objectStoreNames.contains('tests')) {
                         db.deleteObjectStore('tests')
                     }
@@ -57,15 +58,20 @@ const init = (): Promise<boolean> => {
                         db.deleteObjectStore('test_results')
                     }
 
+                    if (db.objectStoreNames.contains('segment_logs')) {
+                        db.deleteObjectStore('segment_logs')
+                    }
+
 
                     logStore = db.createObjectStore('test_logs', { keyPath: 'key', autoIncrement: true });
                     testStore = db.createObjectStore('tests', { keyPath: 'testId' });
                     resultStore = db.createObjectStore('test_results', { keyPath: 'key', autoIncrement: true });
-
+                    segmentLogStore = db.createObjectStore('segment_logs', { keyPath: 'key', autoIncrement: true });
                     testStore.createIndex('ix_testId', 'testId', { unique: false });
                     logStore.createIndex('ix_testId', 'testId', { unique: false });
                     logStore.createIndex('ix_chunk_no', 'no', { unique: false });
                     resultStore.createIndex('ix_testId', 'testId', { unique: false });
+                    segmentLogStore.createIndex('ix_testId', 'testId', { unique: false });
 
                     console.log('Object stores created.');
                     status = 'inited';
@@ -95,6 +101,10 @@ const addResultEntry = (result: any) => {
     addEntry('test_results', result);
 };
 
+const addSegmentLogEntry = (segmentLog: any) => {
+    addEntry('segment_logs', segmentLog);
+};
+
 const addEntry = (storeName: string, entry: any) => {
     // console.log('addEntry to %s', storeName, entry);
 
@@ -119,6 +129,10 @@ const getLogs = async (testId?: string): Promise<any[]> => {
         return getEntries('test_logs');
     }
     
+};
+
+const getSegmentLogs = async (segmentLogId: string): Promise<any[]> => {
+    return getEntriesByTestId('segment_logs', segmentLogId);
 };
 
 const getResults = async (testId: string): Promise<any[]> => {
@@ -181,9 +195,11 @@ export const dbStore = {
     addTestEntry,
     addLogEntry,
     addResultEntry,
+    addSegmentLogEntry,
     init,
     getLogs,
     getResults,
     getDb,
+    getSegmentLogs,
     getTests
 };

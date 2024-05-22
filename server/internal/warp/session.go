@@ -793,6 +793,7 @@ func logtoCSV(quicType string, timeStamp int, segmentSize int, serverAddr string
 	baseDir := filepath.Join("internal", "logs")
 	var fileName string
 	if isAuto {
+		fmt.Printf("WRITING AUTO PROFILE LOG FILE")
 		fileName = filepath.Join(baseDir, fmt.Sprintf("%s-%d-%02d-%02d-%02d.csv", "AUTO", now.Year(), now.Month(), now.Day(), now.Hour()))
 	} else {
 		fileName = filepath.Join(baseDir, fmt.Sprintf("%s-%d-%02d-%02d-%02d.csv", quicType, now.Year(), now.Month(), now.Day(), now.Hour()))
