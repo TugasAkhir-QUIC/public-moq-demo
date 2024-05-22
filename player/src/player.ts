@@ -11,7 +11,7 @@ import { FragmentedMessageHandler } from "./fragment"
 
 export class Player {
 	mediaSource: MediaSource;
-
+	ipaddr: string;
 	init: Map<string, InitParser>;
 	audio: Track;
 	video: Track;
@@ -21,7 +21,7 @@ export class Player {
 	url: string;
 	started?: boolean;
 	paused?: boolean;
-
+	totalSizeProcessed: number;
 	// References to elements in the DOM
 	vidRef: HTMLVideoElement; // The video element itself
 	statsRef: HTMLElement; // The stats div
@@ -56,15 +56,14 @@ export class Player {
 	activeBWTestResult: number;
 	activeBWTestInterval: number;
 	lastActiveBWTestResult: number;
-
 	chunkStats: any[] = [];
 	totalChunkCount = 0; // video track chunk count
 
 	logFunc: Function;
 	testId: string;
-
+	segmentTestId: string;
 	fragment: FragmentedMessageHandler
-
+	isAuto: boolean
 	constructor(props: any) {
 		this.vidRef = props.vid
 		this.statsRef = props.stats
@@ -77,12 +76,13 @@ export class Player {
 		this.categoryRef = props.categoryRef;
 		this.throughputs = new Map();
 		this.throttleCount = 0;
+		this.totalSizeProcessed = 0;
 		this.url = props.url;
 		this.activeBWTestInterval = props.activeBWTestInterval * 1000 || 0;
 
 		this.logFunc = props.logger;
 		this.testId = this.createTestId();
-
+		this.segmentTestId = this.createSegmentLogTestId();
 		this.bufferLevel = new Map();
 
 		this.serverBandwidth = 0;
@@ -93,11 +93,11 @@ export class Player {
 
 		this.mediaSource = new MediaSource()
 		this.vidRef.src = URL.createObjectURL(this.mediaSource)
-
+		this.ipaddr = "";
 		this.init = new Map()
 		this.audio = new Track(new Source(this.mediaSource));
 		this.video = new Track(new Source(this.mediaSource));
-
+		this.isAuto = false;
 		this.fragment = new FragmentedMessageHandler();
 
 		if (props.autoStart) {
@@ -107,6 +107,9 @@ export class Player {
 
 	createTestId = () => {
 		return 't_' + (new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/g, '').replace('T', '_')) + '_' + Math.round(Math.random() * 10000);
+	};
+	createSegmentLogTestId = () => {
+		return 'l_' + (new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/g, '').replace('T', '_')) + '_' + Math.round(Math.random() * 10000);
 	};
 
 	saveResultBySecond = (name: string, value: number, second: number) => {
@@ -143,7 +146,7 @@ export class Player {
 		this.resolutionsRef.addEventListener('change', this.resolutionOnChange)
 		this.throttleDDLRef.addEventListener('change', this.throttleOnChange);
 		this.continueStreamingRef.addEventListener('click', this.continueStreamingClicked);
-		this.activeBWTestRef.addEventListener('click', this.startActiveBWTest);
+		// this.activeBWTestRef.addEventListener('click', this.startActiveBWTest);
 		//ADD CATEGORYREF CHANGE EVENT
 		this.categoryRef.addEventListener('change', this.changeCategory)
 		console.log('in start | url: %s', this.url);
@@ -157,7 +160,7 @@ export class Player {
 		this.api = this.quic.then((q) => {
 			return q.createUnidirectionalStream()
 		})
-
+		this.timeRef = performance.now();
 		// async functions
 		this.receiveStreams();
 		this.receiveDatagrams();
@@ -193,28 +196,59 @@ export class Player {
 	categoryChange = () => {
 		console.log('in categoryChange | category: %s', this.categoryRef.value);
 		let currentCategory = this.categoryRef.value;
+		let categoryUsed = '';
+		if (currentCategory != '3'){
+			categoryUsed = currentCategory
+		}
 		let sendMessage = false;
-		//check if category is 0 for streams, 1 for datagrams
+		let sendAuto = false;
+		//check if category is 0 for streams, 1 for datagrams, 2 Partially Reliable, 3 Auto switch between streams and datagrams.
 		if (currentCategory === '0') {
 			sendMessage = true;
+			sendAuto = false;
 		} else if (currentCategory === '1') {
 			sendMessage = true;
+			sendAuto = false;
 		} else if (currentCategory === '2') {
 			sendMessage = true;
+			sendAuto = false;
+		} else if(currentCategory === '3') {
+			sendMessage = true;
+			sendAuto = true;
 		}
+		this.isAuto = sendAuto;
 		//change to int of currentCategory
-		let numCategory = parseInt(currentCategory);
+		let numCategory = parseInt(categoryUsed);
 
 		if (sendMessage) {
-			this.sendMessage({
-				"x-category": {
-					category: numCategory,
-				}
-			})
-		
+			//NOTIFIES SERVER THAT CLIENT IS USING AUTO MODE
+			if(sendAuto){
+				this.sendMessage({
+					"x-auto": {
+						auto: sendAuto,
+					}
+				})
+			} else{
+				this.sendMessage({
+					"x-category": {
+						category: numCategory,
+					},
+					"x-auto": {
+						auto: sendAuto
+					}
+				})
+
+			}
 		}
 	};
-
+	//Used only for auto in handleSegment
+	changeQuicType = (categoryNum: number) => {
+		this.sendMessage({
+			"x-category": {
+				category: categoryNum,
+			},
+		})
+	};
 
 	pauseOrResume = (pause?: boolean) => {
 		console.log('in pauseOrResume | paused: %s pause: %s', this.paused, pause);
@@ -684,6 +718,11 @@ export class Player {
 		// TODO: UNCOMMENT LOG
 		console.log('msg: %o tcRate: %d serverBandwidth: %d', msg, this.tcRate, this.serverBandwidth)
 
+		//single check to update IP Address for metric purposes
+		if (this.ipaddr === "") {
+			this.ipaddr = msg.client_addr;
+		}
+
 		const segment = new Segment(track.source, init, msg.timestamp)
 		// The track is responsible for flushing the segments in order
 		track.add(segment)
@@ -700,14 +739,15 @@ export class Player {
 
 		let totalSegmentSize = 0;
 		const segmentDownloadStart = performance.now()
-
+		let chunkLatencies = [];
 		let chunkCounter = 0;
 		let isVideoSegment = init.info.videoTracks.length > 0;
 		let lastMoofSize = 0;
 		let lastMoofStartTime = 0;
 		let lastMoofDownloadDuration = 0;
 		let lastMoofClockTime = 0;
-
+		let totalChunkSize = 0;
+		let prevChunkLatency = 0;
 		// One day I'll figure it out; until then read one top-level atom at a time
 		let count = 1
 		while (true) {
@@ -733,17 +773,23 @@ export class Player {
 					lastMoofSize = size;
 					lastMoofStartTime = boxStartOffset;
 					lastMoofDownloadDuration = performance.now() - lastMoofStartTime;
+					// console.log("MOOF startTime", lastMoofStartTime)
+					// console.log(count, "moof")
 					lastMoofClockTime = Date.now();
 				} else if (boxType === 'mdat') {
-					const chunkDownloadDuration = performance.now() - lastMoofStartTime;
+					const chunkDownloadDuration = performance.now() - boxStartOffset;
+					// console.log("TIME TO DOWNLOAD 1 MOOF MDAT CHUNK ", chunkDownloadDuration)
 					const chunkSize = size + lastMoofSize; // bytes
+					totalChunkSize += chunkSize;
 					const chunkLatency = Math.round(lastMoofClockTime - msg.at);
+					// console.log(count, "mdat")
 
 					++this.totalChunkCount;
 
 					dbStore.addLogEntry({
 						testId: this.testId,
 						segmentId: msg.init,
+						address: this.ipaddr,
 						no: chunkCounter,
 						chunkSize,
 						chunkDownloadDuration,
@@ -758,59 +804,136 @@ export class Player {
 						lastActiveBWTestResult: this.lastActiveBWTestResult,
 						timestamp: Date.now()
 					});
+					
 
 					const stat = [chunkCounter, chunkSize, chunkDownloadDuration, lastMoofDownloadDuration, chunkDownloadDuration > 0 ? (chunkSize * 8 * 1000 / chunkDownloadDuration) : 0, chunkLatency, msg.timestamp];
 					this.chunkStats.push(stat);
+					chunkLatencies.push(chunkLatency);
+					// MAYBE REMOVE???
+					// if (chunkCounter === 1) { // TODO: IFRAME
+					// 	let filteredStats = [stat];
+					// 	// console.log("chunk 1")
+					// 	// console.log(filteredStats);
+					// 	const val = this.computeTPut(filteredStats);
+					// 	// TODO: UNCOMMENT LOG
+					// 	console.log('ifa calc', val, stat, this.throughputs.get('ifa'));
+					// 	// if the value is an outlier (100 times more than the last measurement)
+					// 	// discard it
+					// 	const lastVal = (this.throughputs.get('ifa') || 0);
+					// 	if (lastVal === 0 || val < lastVal * 100) {
+					// 		this.throughputs.set('ifa', val);
+					// 	}
+					// }
 
-					if (chunkCounter === 1) { // TODO: IFRAME
-						let filteredStats = [stat];
-						const val = this.computeTPut(filteredStats);
-						// TODO: UNCOMMENT LOG
-						console.log('ifa calc', val, stat, this.throughputs.get('ifa'));
-						// if the value is an outlier (100 times more than the last measurement)
-						// discard it
-						const lastVal = (this.throughputs.get('ifa') || 0);
-						if (lastVal === 0 || val < lastVal * 100) {
-							this.throughputs.set('ifa', val);
-						}
-					}
+					// if (this.totalChunkCount >= this.getSWMAWindowSize() && this.totalChunkCount % this.getSWMACalculationInterval() === 0) {
+					// 	const stats = this.chunkStats.slice(-this.getSWMAWindowSize());
+					// 	let filteredStats: any[] = this.filterStats(stats, this.getSWMAThreshold(), this.getSWMAThresholdType(), this.throughputs.get('swma') || 0);
+					// 	const tput = this.computeTPut(filteredStats);
+					// 	if (tput > 0) {
+					// 		this.throughputs.set('swma', tput);
+					// 	} else {
+					// 		console.warn('tput is zero.');
+					// 	}
 
-					if (this.totalChunkCount >= this.getSWMAWindowSize() && this.totalChunkCount % this.getSWMACalculationInterval() === 0) {
-						const stats = this.chunkStats.slice(-this.getSWMAWindowSize());
-						let filteredStats: any[] = this.filterStats(stats, this.getSWMAThreshold(), this.getSWMAThresholdType(), this.throughputs.get('swma') || 0);
-						const tput = this.computeTPut(filteredStats);
-						if (tput > 0) {
-							this.throughputs.set('swma', tput);
-						} else {
-							console.warn('tput is zero.');
-						}
-
-					}
+					// }
+					//chunkThroughput
+					// const chunkTPut = this.computeChunkTPut([stat], segmentDownloadStart);
+					// //console.log("this is STATS : " + [stat]);
+					// if (chunkTPut > 0) {
+					// 	this.throughputs.set('chunk', chunkTPut);
+					// }
 				}
+				count++
 			}
+			
 			totalSegmentSize += size;
+			this.totalSizeProcessed += size;
+			// console.log(count, "TOTAL MOOF/MDAT COUNT")
+			// console.log("total segment size", totalSegmentSize)
+			//ComputeSegmentThroughput
+			const segmentTPut = this.computeSegmentTPut(this.totalSizeProcessed, performance.now());
+			if (segmentTPut > 0) {
+				this.throughputs.set('chunk', segmentTPut);
+			}
+			// console.log("total segment size", totalSegmentSize)
+			// console.log("player total size processed", this.totalSizeProcessed)
 
 			// if (count === 5 || count === 15) {
 			// 	count++
 			// 	continue
 			// }
 			segment.push(atom)
-			count++
+			// count++
+			//Add db entry to segment logs
 
 			track.flush() // Flushes if the active segment has new samples
 		}
-
+		let avgSegmentLatency;
+		if(msg.init!= '4'){
+			avgSegmentLatency = this.calculateAverageChunkLatency(chunkLatencies).toFixed(2);
+			// console.log(`
+			// 			=====================================================
+			// 			segment timestamp : ${msg.timestamp}
+			// 			total chunk latency : ${chunkLatencies.join(', ')}
+			// 			average chunk latency : ${avgSegmentLatency}
+			// 			=====================================================
+			// 			`);
+			this.throughputs.set('avgSegmentLatency', Number(avgSegmentLatency));
+		}
+		// console.log('avgSegmentLatency: %d', avgSegmentLatency);
 		segment.finish()
+		let serverBandwidth = this.serverBandwidth;
+		let serverBandwidthInMegabits = (serverBandwidth / 1_048_576).toFixed(3);
+		//judgement to change from streams to datagrams vice versa if auto is True;
+		if (this.isAuto){
+			//judgement of average bandwidth, average latency
+			//Changing only to datagrams when the latency is greater than a number
+			if (Number(serverBandwidthInMegabits) >= 4 && Number(avgSegmentLatency) > 100){
+				this.changeQuicType(1);
+			} else if (Number(serverBandwidthInMegabits) >= 4 && Number(avgSegmentLatency) < 100){
+				this.changeQuicType(0);
+			} else if (Number(serverBandwidthInMegabits) < 4 && Number(serverBandwidth) >= 2.6 && Number(avgSegmentLatency) > 150){
+				this.changeQuicType(1);
+			} else if (Number(serverBandwidthInMegabits) < 4 && Number(serverBandwidth) >= 2.6 && Number(avgSegmentLatency) < 150){
+				this.changeQuicType(0);
+			} else if (Number(serverBandwidthInMegabits) < 2.6 && Number(serverBandwidth) >= 1.3 && Number(avgSegmentLatency) > 200){
+				this.changeQuicType(1);
+			} else if (Number(serverBandwidthInMegabits) < 2.6 && Number(serverBandwidth) >= 1.3 && Number(avgSegmentLatency) < 200){
+				this.changeQuicType(0);
+			} else if (Number(serverBandwidthInMegabits) < 1.3 && Number(serverBandwidth) >= 0.325 && Number(avgSegmentLatency) > 250){
+				this.changeQuicType(1);
+			} else if (Number(serverBandwidthInMegabits) < 1.3 && Number(serverBandwidth) >= 0.325 && Number(avgSegmentLatency) < 250){
+				this.changeQuicType(0);
+			} else if (Number(serverBandwidthInMegabits) < 0.325 && Number(serverBandwidth) >= 0 && Number(avgSegmentLatency) > 300){
+				this.changeQuicType(1);
+			} else if (Number(serverBandwidthInMegabits) < 0.325 && Number(serverBandwidth) >= 0 && Number(avgSegmentLatency) < 300){
+				this.changeQuicType(0);
+			}
 
+		}
 		const segmentFinish = performance.now() - segmentDownloadStart;
-
 		if (isVideoSegment) {
 			this.logFunc('-----------------------------------------------------')
+			let segmentStartTime = new Date(performance.timeOrigin + segmentStartOffset).toISOString())
 			this.logFunc('segment chunk length: ' + chunkCounter);
 			this.logFunc('segment finish duration: ' + Math.round(segmentFinish));
 			this.logFunc('total segment size: ' + formatBits(totalSegmentSize * 8));
-			this.logFunc('segment start (client): ' + new Date(performance.timeOrigin + segmentStartOffset).toISOString());
+			this.logFunc('segment start (client): ' + segmentStartTime);
 			this.logFunc('availability time (server): ' + new Date(msg.at).toISOString());
+			if(msg.init!= '4'){
+				dbStore.addSegmentLogEntry({
+					testId: this.segmentTestId,
+					segmentId: msg.init,
+					address: this.ipaddr,
+					totalChunks: chunkCounter,
+					size: totalSegmentSize,
+					latency: avgSegmentLatency,
+					startTime: segmentStartTime,
+					bandwidth: serverBandwidthInMegabits,
+					timestamp: msg.timestamp,
+					server_timestamp: msg.at,
+				});
+			}
 		}
 	}
 
@@ -862,8 +985,24 @@ export class Player {
 		filteredStats = filteredStats.concat(zeroDurations);
 
 		// TODO: UNCOMMENT LOG
-		console.log('computeTPut | after filtering: chunk count: %d', filteredStats.length);
+		//console.log('computeTPut | after filtering: chunk count: %d', filteredStats.length);
 		return filteredStats;
+	}
+	calculateAverageChunkLatency(arrivalTimes: number[]): number {
+		// Array to store calculated chunk latencies
+		let chunkLatencies: number[] = [];
+	
+		// Loop through the arrival times and calculate the differences
+		for (let i = 1; i < arrivalTimes.length; i++) {
+			let latency = arrivalTimes[i] - arrivalTimes[i - 1];
+			chunkLatencies.push(latency);
+		}
+	
+		// Calculate the average latency
+		const totalLatency = chunkLatencies.reduce((sum, latency) => sum + latency, 0);
+		const averageLatency = totalLatency / chunkLatencies.length;
+	
+		return averageLatency;
 	}
 
 	computeTPut = (stats: any[]) => {
@@ -879,6 +1018,24 @@ export class Player {
 		});
 		return totalSize * 8 * 1000 / totalDuration;
 	};
+
+	computeChunkTPut = (stats: any[], timestart: number) => {
+		let totalSize = 0;
+		stats.forEach((arr, i) => {
+			const size = arr[1];
+			if (size > 0) {
+				totalSize += size;
+			}
+		});
+		return totalSize * 8 * 1000 / (performance.now() - timestart);
+	}
+
+	computeSegmentTPut = (totalSize: number, timestart: number) => {
+		// console.log("timestart: ", timestart)
+		// console.log("timeRef: ", this.timeRef)
+		return totalSize * 8 * 1000 / (timestart - this.timeRef);
+	
+	}
 
 	updateStats = () => {
 		const audioFiller = this.statsRef.querySelector('.audio.buffer .fill') as HTMLElement;
@@ -897,13 +1054,21 @@ export class Player {
 
 		const bw = document.querySelector('#stats .server_bw') as HTMLDivElement;
 		const bw_swma_threshold = document.querySelector('#stats .swma_threshold') as HTMLDivElement;
+		const chunk_throughput = document.querySelector('#stats .chunk_throughput') as HTMLDivElement;
+		const chunk_latency = document.querySelector('#stats .chunk_latency') as HTMLDivElement;
+		const chunk_volume = document.querySelector('#stats .total_chunk_volume') as HTMLDivElement;
+		const elapsed_time = document.querySelector('#stats .elapsed_time') as HTMLDivElement;
 		const bw_active_bw = document.querySelector('#stats .active_bw') as HTMLDivElement;
 
 
 		if (bw) {
 			bw.innerText = formatBits(this.serverBandwidth, 1).toString();
-			bw_swma_threshold.innerText = formatBits(this.throughputs.get('swma') || 0, 1).toString() + ' / ' + formatBits(this.throughputs.get('ifa') || 0, 1).toString();
-			bw_active_bw.innerText = formatBits(this.lastActiveBWTestResult, 1).toString();
+			// bw_swma_threshold.innerText = formatBits(this.throughputs.get('swma') || 0, 1).toString() + ' / ' + formatBits(this.throughputs.get('ifa') || 0, 1).toString();
+			chunk_throughput.innerText = formatBits(this.throughputs.get("chunk") || 0, 1).toString();
+			chunk_volume.innerText = formatBits(this.totalSizeProcessed * 8, 1).toString();
+			elapsed_time.innerText = ((performance.now() - this.timeRef)/1000).toString();
+			chunk_latency.innerText = this.throughputs.get('avgSegmentLatency')?.toString() || '0';
+			// bw_active_bw.innerText = formatBits(this.lastActiveBWTestResult, 1).toString();
 		}
 	}
 
@@ -933,16 +1098,29 @@ export class Player {
 		}
 
 		// download results
-		const results = await dbStore.getResults(testId || this.testId);
-		if (results.length > 0) {
-			const headers = Object.keys(results[0]);
-			const csvContent = 'data:application/vnd.ms-excel;charset=utf-8,' + headers.join('\t') + '\n' + results.map(e => Object.values(e).join('\t')).join('\n');
+		// const results = await dbStore.getResults(testId || this.testId);
+		// if (results.length > 0) {
+		// 	const headers = Object.keys(results[0]);
+		// 	const csvContent = 'data:application/vnd.ms-excel;charset=utf-8,' + headers.join('\t') + '\n' + results.map(e => Object.values(e).join('\t')).join('\n');
+		// 	const encodedUri = encodeURI(csvContent);
+		// 	link.setAttribute('href', encodedUri);
+		// 	link.setAttribute('download', 'results_' + this.testId + '.xls');
+		// 	link.click();
+		// } else {
+		// 	console.log('no results');
+		// }
+
+		//download segment stats
+		const segmentLogs = await dbStore.getSegmentLogs(this.segmentTestId);
+		if (segmentLogs.length > 0) {
+			const headers = Object.keys(segmentLogs[0]);
+			const csvContent = 'data:application/vnd.ms-excel;charset=utf-8,' + headers.join('\t') + '\n' + segmentLogs.map(e => Object.values(e).join('\t')).join('\n');
 			const encodedUri = encodeURI(csvContent);
 			link.setAttribute('href', encodedUri);
-			link.setAttribute('download', 'results_' + this.testId + '.xls');
+			link.setAttribute('download', 'segment_logs_' + this.testId + '.xls');
 			link.click();
 		} else {
-			console.log('no results');
+			console.log('no segment logs');
 		}
 
 		link.remove();

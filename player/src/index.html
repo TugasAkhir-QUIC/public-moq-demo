@@ -40,17 +40,18 @@
               >
                 Pause Streaming
               </button>
-              <button type="button" id="active_bw_test">Active BW Test</button>
+              <!-- <button type="button" id="active_bw_test">Active BW Test</button>
               <button type="button" id="test_datagram">Test Datagram</button>
               <button type="button" id="test_stream">Test Stream</button>
               <button type="button" id="test_datagram2">
                 Test Datagram Video
-              </button>
-              <button type="button" id="test_stream2">Test Stream Video</button>
+              </button> -->
+              <!-- <button type="button" id="test_stream2">Test Stream Video</button> -->
               <select name="category" id="category">
                 <option value="0" selected>Stream</option>
                 <option value="1">Datagram</option>
                 <option value="2">Hybrid</option>
+                <option value="3">Auto</option>
               </select>
             </div>
             <a
@@ -79,10 +80,18 @@
 
             <label>Server Reported Bandwidth</label>
             <div class="server_bw"></div>
-            <label>SWMA / IFA</label>
-            <div class="swma_threshold"></div>
-            <label>Last Active BW Test</label>
-            <div class="active_bw"></div>
+            <!-- <label>QUIC Stream: SWMA / IFA</label>
+            <div class="swma_threshold"></div> -->
+            <label>Segment Chunk Latency</label>
+            <div class="chunk_latency"></div>
+            <label>Overall Chunk Throughput</label>
+            <div class="chunk_throughput"></div>
+            <label>Total Video Chunk Volume</label>
+            <div class="total_chunk_volume"></div>
+            <label>Time Elapsed</label>
+            <div class="elapsed_time"></div>
+            <!-- <label>Last Active BW Test</label>
+            <div class="active_bw"></div> -->
           </div>
           <div id="repo_info"></div>
         </div>
