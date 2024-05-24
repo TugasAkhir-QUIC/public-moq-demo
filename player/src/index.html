@@ -5,11 +5,19 @@
   <head>
     <meta charset="UTF-8" />
     <title>WARP</title>
+    <link href="https://api.fontshare.com/v2/css?f[]=satoshi@300&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="player.css" />
     <script src="appsettings.js"></script>
   </head>
-
   <body>
+    <header>
+      <div class="navbar">
+        <h1>QUIC Testbed</h1>
+        <a href="https://github.com/TugasAkhir-QUIC/public-moq-demo" target="_blank">
+          <img src="assets/github-mark-white.svg" class="github_logo" />
+        </a>
+      </div>
+    </header>
     <div id="main">
       <div>
         <div id="player">
@@ -22,9 +30,7 @@
             <div id="controls">
               <button type="button" id="start">Start</button>
               <button type="button" id="live">Go Live</button>
-              <button type="button" id="throttle" style="display: none">
-                Throttle: None
-              </button>
+              <button type="button" id="throttle" style="display: none">Throttle: None</button>
 
               <select id="throttles">
                 <option>Throttle to:</option>
@@ -33,13 +39,7 @@
               <select id="resolutions">
                 <option>Set resolution to:</option>
               </select>
-              <button
-                type="button"
-                id="continue_streaming"
-                data-status="streaming"
-              >
-                Pause Streaming
-              </button>
+              <button type="button" id="continue_streaming" data-status="streaming">Pause Streaming</button>
               <!-- <button type="button" id="active_bw_test">Active BW Test</button>
               <button type="button" id="test_datagram">Test Datagram</button>
               <button type="button" id="test_stream">Test Stream</button>
@@ -54,26 +54,22 @@
                 <option value="3">Auto</option>
               </select>
             </div>
-            <a
+            <!-- <a
               href="https://github.com/streaming-university/public-moq-demo"
               target="_blank"
             >
               <img src="assets/github-mark-white.svg" class="github_logo" />
-            </a>
+            </a> -->
           </div>
         </div>
         <div id="right_col">
           <div id="stats">
-            <label class="audio label"
-              >Audio Buffer: <span class="seconds"></span
-            ></label>
+            <label class="audio label">Audio Buffer: <span class="seconds"></span></label>
             <div class="audio buffer">
               <div class="fill"></div>
             </div>
 
-            <label class="video label"
-              >Video Buffer: <span class="seconds"></span
-            ></label>
+            <label class="video label">Video Buffer: <span class="seconds"></span></label>
             <div class="video buffer">
               <div class="fill"></div>
             </div>
@@ -90,6 +86,8 @@
             <div class="total_chunk_volume"></div>
             <label>Time Elapsed</label>
             <div class="elapsed_time"></div>
+            <label>Current QUIC Type</label>
+            <div class="quic_type"></div>
             <!-- <label>Last Active BW Test</label>
             <div class="active_bw"></div> -->
           </div>
@@ -98,6 +96,9 @@
       </div>
       <div>
         <div id="plot"></div>
+        <div id="plot_latency"></div>
+        <div id="plot_throughput"></div>
+        
         <a href="javascript: void 0" onclick="" id="toggle_log">Show Logs</a>
         <div id="log">
           <h4>Log</h4>

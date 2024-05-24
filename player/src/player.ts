@@ -58,7 +58,7 @@ export class Player {
 	lastActiveBWTestResult: number;
 	chunkStats: any[] = [];
 	totalChunkCount = 0; // video track chunk count
-
+	currCategory: string;
 	logFunc: Function;
 	testId: string;
 	segmentTestId: string;
@@ -99,7 +99,7 @@ export class Player {
 		this.video = new Track(new Source(this.mediaSource));
 		this.isAuto = false;
 		this.fragment = new FragmentedMessageHandler();
-
+		this.currCategory = '';
 		if (props.autoStart) {
 			this.start();
 		}
@@ -206,12 +206,15 @@ export class Player {
 		if (currentCategory === '0') {
 			sendMessage = true;
 			sendAuto = false;
+			this.currCategory = '';
 		} else if (currentCategory === '1') {
 			sendMessage = true;
 			sendAuto = false;
+			this.currCategory = '';
 		} else if (currentCategory === '2') {
 			sendMessage = true;
 			sendAuto = false;
+			this.currCategory = '';
 		} else if(currentCategory === '3') {
 			sendMessage = true;
 			sendAuto = true;
@@ -243,6 +246,15 @@ export class Player {
 	};
 	//Used only for auto in handleSegment
 	changeQuicType = (categoryNum: number) => {
+		if (categoryNum === 0) {
+			this.currCategory = 'QUIC Streams'
+		}
+		if (categoryNum === 1) {
+			this.currCategory = 'QUIC Datagrams'
+		}
+		if (categoryNum === 2) {
+			this.currCategory = 'QUIC Partially Reliable'
+		}
 		this.sendMessage({
 			"x-category": {
 				category: categoryNum,
@@ -888,24 +900,25 @@ export class Player {
 		if (this.isAuto){
 			//judgement of average bandwidth, average latency
 			//Changing only to datagrams when the latency is greater than a number
+			//For Future Work: There must be a better way to do this. Like receiving the bitrates from init maybe? and then judge from there? idk.
 			if (Number(serverBandwidthInMegabits) >= 4 && Number(avgSegmentLatency) > 100){
-				this.changeQuicType(1);
+				this.changeQuicType(2);
 			} else if (Number(serverBandwidthInMegabits) >= 4 && Number(avgSegmentLatency) < 100){
 				this.changeQuicType(0);
 			} else if (Number(serverBandwidthInMegabits) < 4 && Number(serverBandwidth) >= 2.6 && Number(avgSegmentLatency) > 150){
-				this.changeQuicType(1);
+				this.changeQuicType(2);
 			} else if (Number(serverBandwidthInMegabits) < 4 && Number(serverBandwidth) >= 2.6 && Number(avgSegmentLatency) < 150){
 				this.changeQuicType(0);
 			} else if (Number(serverBandwidthInMegabits) < 2.6 && Number(serverBandwidth) >= 1.3 && Number(avgSegmentLatency) > 200){
-				this.changeQuicType(1);
+				this.changeQuicType(2);
 			} else if (Number(serverBandwidthInMegabits) < 2.6 && Number(serverBandwidth) >= 1.3 && Number(avgSegmentLatency) < 200){
 				this.changeQuicType(0);
 			} else if (Number(serverBandwidthInMegabits) < 1.3 && Number(serverBandwidth) >= 0.325 && Number(avgSegmentLatency) > 250){
-				this.changeQuicType(1);
+				this.changeQuicType(2);
 			} else if (Number(serverBandwidthInMegabits) < 1.3 && Number(serverBandwidth) >= 0.325 && Number(avgSegmentLatency) < 250){
 				this.changeQuicType(0);
 			} else if (Number(serverBandwidthInMegabits) < 0.325 && Number(serverBandwidth) >= 0 && Number(avgSegmentLatency) > 300){
-				this.changeQuicType(1);
+				this.changeQuicType(2);
 			} else if (Number(serverBandwidthInMegabits) < 0.325 && Number(serverBandwidth) >= 0 && Number(avgSegmentLatency) < 300){
 				this.changeQuicType(0);
 			}

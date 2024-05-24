@@ -245,18 +245,12 @@ const startPlotting = () => {
 
         // save results by time
         // these will be downloaded after the test
-        player.saveResultBySecond('swma', player.throughputs.get('swma') || 0, currentSec);
-        player.saveResultBySecond('ifa', player.throughputs.get('ifa') || 0, currentSec);
         player.saveResultBySecond('etp', player.serverBandwidth || 0, currentSec);
         player.saveResultBySecond('tcRate', player.tcRate || 0, currentSec);
-        player.saveResultBySecond('last-active-bw', player.lastActiveBWTestResult || 0, currentSec);
 
         plotData.forEach(p => (p.x as Plotly.Datum[]).push(currentSec));
         (plotData[0].y as Plotly.Datum[]).push(player.serverBandwidth / 1000000);
         (plotData[1].y as Plotly.Datum[]).push(player.tcRate / 1000000);
-        (plotData[2].y as Plotly.Datum[]).push(player.supress_throughput_value ? null : (player.throughputs.get('swma') || 0) / 1000000);
-        (plotData[3].y as Plotly.Datum[]).push(player.supress_throughput_value ? null : (player.throughputs.get('ifa') || 0) / 1000000);
-        (plotData[4].y as Plotly.Datum[]).push(player.activeBWTestResult === 0 ? null : player.activeBWTestResult / 1000000);
 
         // show max 60 seconds
         if (plotData[0].x.length > displayedHistory) {

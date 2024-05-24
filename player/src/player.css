@@ -1,141 +1,218 @@
-html, body {
-	width: 100%;
+html,
+body {
+  width: 100%;
 }
 
-
 body {
-	background: #000000;
-	color: #ffffff;
-	padding: 0;
-	margin: 0;
-	display: flex;
-	justify-content: center;
-	font-family: sans-serif;
+  background: #000000;
+  color: #ffffff;
+  padding: 0;
+  margin: 0;
+  display: flex-column;
+  justify-content: center;
+  font-family: sans-serif;
+}
+header {
+  width: 100%;
+  background-color: #000000;
+}
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+}
+
+.navbar h1 {
+  font-family: "Satoshi", sans-serif;
+  font-size: 4rem;
+  color: #ffffff;
+  margin: 0;
+}
+
+.navbar a {
+  display: flex;
+  align-items: center;
+}
+
+.navbar .github_logo {
+  width: 80px;
+  height: 80px;
 }
 
 #main {
-	padding: 20px;
-	width: 100%;
+  padding-left: 20px;
 }
 
 #main > div:nth-child(1) {
-	display: grid;
-	grid-template-columns: 0.6fr 0.4fr;
-	min-height: 50%;
-	align-items: center;
-	margin-bottom: 40px;
+  display: grid;
+  grid-template-columns: 0.6fr 0.4fr;
+  min-height: 50%;
+  align-items: center;
+  margin-bottom: 40px;
 }
 
 #screen {
-	position: relative;
+  position: relative;
 }
 
 #play {
-	position: absolute;
-	width: 100%;
-	height: 100%;
-	background: rgba(0, 0, 0, 0.5);
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
 
-	display: flex;
-	justify-content: center;
-	align-items: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 
-	z-index: 1;
+  z-index: 1;
 }
 
 #vid {
-	width: 100%;
-	border-radius: 20px;
-	margin-bottom: 20px;
+  width: 100%;
+  border-radius: 20px;
+  margin-bottom: 20px;
 }
 
 #screen_bottom {
-	display: flex;
-	justify-content: space-between;
+  display: flex;
+  justify-content: space-between;
 }
 
 #controls {
-	display: flex;
-	align-items: center;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 #controls > * {
-	margin-right: 8px;
+  margin-right: 8px;
 }
 
 #controls label {
-	margin-right: 8px;
+  margin-right: 8px;
+}
+
+#controls button {
+  display: inline-block;
+  outline: 0;
+  cursor: pointer;
+  padding: 5px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  vertical-align: middle;
+  border: 1px solid;
+  border-radius: 6px;
+  color: #000000;
+  background-color: #fafbfc;
+  border-color: #1b1f2326;
+  box-shadow: rgba(27, 31, 35, 0.04) 0px 1px 0px 0px, rgba(255, 255, 255, 0.25) 0px 1px 0px 0px inset;
+  transition: 0.2s cubic-bezier(0.3, 0, 0.5, 1);
+  transition-property: color, background-color, border-color;
+}
+#controls button:hover {
+  color: #ffffff;
+  background-color: #0366d6;
+  border-color: #1b1f2326;
+  box-shadow: rgba(27, 31, 35, 0.1) 0px 1px 0px 0px, rgba(255, 255, 255, 0.03) 0px 1px 0px 0px inset;
+  transition-duration: 0.1s;
+}
+#controls select {
+  display: inline-block;
+  outline: 0;
+  cursor: pointer;
+  padding: 5px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  vertical-align: middle;
+  border: 1px solid;
+  border-radius: 6px;
+  color: #000000;
+  background-color: #fafbfc;
+  border-color: #1b1f2326;
+  box-shadow: rgba(27, 31, 35, 0.04) 0px 1px 0px 0px, rgba(255, 255, 255, 0.25) 0px 1px 0px 0px inset;
+  transition: 0.2s cubic-bezier(0.3, 0, 0.5, 1);
+  transition-property: color, background-color, border-color;
+}
+
+/* Focused state styles */
+#controls select:focus {
+  border-color: #1b1f2326;
+  box-shadow: rgba(27, 31, 35, 0.1) 0px 1px 0px 0px, rgba(255, 255, 255, 0.03) 0px 1px 0px 0px inset;
+  transition-duration: 0.1s;
 }
 
 #stats {
-	display: grid;
-	grid-template-columns: auto 1fr;
-	gap: 5px;
-	height: fit-content;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 5px;
+  height: fit-content;
 }
 
 #stats label {
-	padding: 0 1rem;
+  padding: 0 1rem;
 }
 
 .buffer {
-	position: relative;
-	width: 100%;
+  position: relative;
+  width: 100%;
 }
 
 .buffer .fill {
-	position: absolute;
-	transition-duration: 0.1s;
-	transition-property: left, right, background-color;
-	background-color: turquoise;
-	height: 100%;
-	text-align: right;
-	padding-right: 0.5rem;
-	overflow: hidden;
+  position: absolute;
+  transition-duration: 0.1s;
+  transition-property: left, right, background-color;
+  background-color: turquoise;
+  height: 100%;
+  text-align: right;
+  padding-right: 0.5rem;
+  overflow: hidden;
 }
 
-.label>.seconds {
-	font-size: 0.8em;
+.label > .seconds {
+  font-size: 0.8em;
 }
 
 .buffer .fill.net {
-	background-color: turquoise;
+  background-color: turquoise;
 }
 
 #plot {
-	margin-top: 20px;
-	margin-bottom: 20px;
+  margin-top: 20px;
+  margin-bottom: 20px;
 }
 
-
-
 #repo_info {
-    margin-left: 17px;
-    border-radius: 10px;
-	width: 100%;
-	text-align: right;
+  margin-left: 17px;
+  border-radius: 10px;
+  width: 100%;
+  text-align: right;
 }
 
 #right_col {
-	display: grid;
-    grid-template-rows: 1fr auto;
-    height: 80%;
-	width: 100%;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  height: 80%;
+  width: 100%;
 }
 
 .github_logo {
-	width: 48px;
+  width: 48px;
 }
 
 #toggle_log {
-	color: white;
-	font-size: 0.8rem;
+  color: white;
+  font-size: 0.8rem;
 }
 
 #log {
-	display: none;
-	height: 500px;
-    background-color: white;
-    overflow: auto;
-    color: black;
+  display: none;
+  height: 500px;
+  background-color: white;
+  overflow: auto;
+  color: black;
 }
