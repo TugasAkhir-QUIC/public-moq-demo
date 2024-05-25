@@ -759,7 +759,9 @@ export class Player {
 		let lastMoofDownloadDuration = 0;
 		let lastMoofClockTime = 0;
 		let totalChunkSize = 0;
-		let prevChunkLatency = 0;
+		let moofClockTime = 0;
+		let chunkEnd = 0;
+		let boxStartTime;
 		// One day I'll figure it out; until then read one top-level atom at a time
 		let count = 1
 		while (true) {
@@ -769,7 +771,7 @@ export class Player {
 			}
 
 			const boxStartOffset = performance.now();
-
+			boxStartTime = boxStartOffset.toFixed(2);
 			const raw = await stream.peek(4)
 			const size = new DataView(raw.buffer, raw.byteOffset, raw.byteLength).getUint32(0)
 			const atom = await stream.bytes(size)
@@ -785,17 +787,15 @@ export class Player {
 					lastMoofSize = size;
 					lastMoofStartTime = boxStartOffset;
 					lastMoofDownloadDuration = performance.now() - lastMoofStartTime;
-					// console.log("MOOF startTime", lastMoofStartTime)
-					// console.log(count, "moof")
 					lastMoofClockTime = Date.now();
+					moofClockTime = performance.now();
 				} else if (boxType === 'mdat') {
 					const chunkDownloadDuration = performance.now() - boxStartOffset;
 					// console.log("TIME TO DOWNLOAD 1 MOOF MDAT CHUNK ", chunkDownloadDuration)
 					const chunkSize = size + lastMoofSize; // bytes
 					totalChunkSize += chunkSize;
 					const chunkLatency = Math.round(lastMoofClockTime - msg.at);
-					// console.log(count, "mdat")
-
+					chunkEnd = Date.now();
 					++this.totalChunkCount;
 
 					dbStore.addLogEntry({
@@ -806,14 +806,15 @@ export class Player {
 						chunkSize,
 						chunkDownloadDuration,
 						lastMoofDownloadDuration,
+						boxStartTime,
+						chunkStart: lastMoofClockTime,
+						chunkEnd,
 						chunkLatency,
 						msg_timestamp: msg.timestamp,
 						msg_at: msg.at,
 						msg_etp: msg.etp,
 						msg_tc_rate: msg.tc_rate,
-						perf_now: performance.now(),
-						activeBWTestResult: this.activeBWTestResult,
-						lastActiveBWTestResult: this.lastActiveBWTestResult,
+						perf_now: performance.now().toFixed(2),
 						timestamp: Date.now()
 					});
 					
@@ -875,9 +876,6 @@ export class Player {
 			// 	continue
 			// }
 			segment.push(atom)
-			// count++
-			//Add db entry to segment logs
-
 			track.flush() // Flushes if the active segment has new samples
 		}
 		let avgSegmentLatency;
@@ -894,6 +892,7 @@ export class Player {
 		}
 		// console.log('avgSegmentLatency: %d', avgSegmentLatency);
 		segment.finish()
+		let segmentFinishTime = Date.now();
 		let serverBandwidth = this.serverBandwidth;
 		let serverBandwidthInMegabits = (serverBandwidth / 1_048_576).toFixed(3);
 		//judgement to change from streams to datagrams vice versa if auto is True;
@@ -925,15 +924,17 @@ export class Player {
 
 		}
 		const segmentFinish = performance.now() - segmentDownloadStart;
+		let segmentDateFinish = new Date(segmentFinishTime).toISOString();
 		if (isVideoSegment) {
 			this.logFunc('-----------------------------------------------------')
-			let segmentStartTime = new Date(performance.timeOrigin + segmentStartOffset).toISOString())
+			let segmentStartTime = new Date(performance.timeOrigin + segmentStartOffset).toISOString()
 			this.logFunc('segment chunk length: ' + chunkCounter);
 			this.logFunc('segment finish duration: ' + Math.round(segmentFinish));
 			this.logFunc('total segment size: ' + formatBits(totalSegmentSize * 8));
 			this.logFunc('segment start (client): ' + segmentStartTime);
 			this.logFunc('availability time (server): ' + new Date(msg.at).toISOString());
 			if(msg.init!= '4'){
+				this.throughputs.set('segmentChunksLatency', Number(avgSegmentLatency));
 				dbStore.addSegmentLogEntry({
 					testId: this.segmentTestId,
 					segmentId: msg.init,
@@ -942,6 +943,7 @@ export class Player {
 					size: totalSegmentSize,
 					latency: avgSegmentLatency,
 					startTime: segmentStartTime,
+					endTime: segmentDateFinish,
 					bandwidth: serverBandwidthInMegabits,
 					timestamp: msg.timestamp,
 					server_timestamp: msg.at,
