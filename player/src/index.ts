@@ -91,6 +91,7 @@ const plotLayout = {
         l: 50
     },
     height: 400,
+    width: 440,
     title: '',
     showlegend: true,
     legend: {
@@ -115,6 +116,94 @@ const plotLayout = {
         anchor: 'x',
         showgrid: true,
         title: 'Mbps',
+        rangemode: 'tozero'
+    },
+    font: {
+        family: 'sans-serif',
+        size: 18,
+        color: '#000'
+    },
+
+} as Plotly.Layout;
+//plotlayout for latency
+const plotLayoutLatency = {
+    hovermode: 'closest',
+    margin: {
+        r: 10,
+        t: 40,
+        b: 40,
+        l: 50
+    },
+    height: 400,
+    width: 440,
+    title: '',
+    showlegend: true,
+    legend: {
+        x: 0,
+        y: -0.3,
+        orientation: 'h',
+    },
+    grid: {
+        rows: 1,
+        columns: 1,
+        pattern: 'independent'
+    },
+    xaxis: {
+        anchor: 'y',
+        type: 'linear',
+        showgrid: true,
+        showticklabels: true,
+        title: 'Time (s)',
+        rangemode: 'tozero'
+    },
+    yaxis: {
+        anchor: 'x',
+        showgrid: true,
+        title: 'Latency (ms)',
+        rangemode: 'tozero'
+    },
+    font: {
+        family: 'sans-serif',
+        size: 18,
+        color: '#000'
+    },
+
+} as Plotly.Layout;
+//plotlayout for throughput
+const plotLayoutThroughput = {
+    hovermode: 'closest',
+    margin: {
+        r: 10,
+        t: 40,
+        b: 40,
+        l: 50
+    },
+    height: 400,
+    width: 440,
+    title: '',
+    showlegend: true,
+    legend: {
+        x: 0,
+        y: -0.3,
+        orientation: 'h',
+    },
+    grid: {
+        rows: 1,
+        columns: 1,
+        pattern: 'independent'
+    },
+    xaxis: {
+        anchor: 'y',
+        type: 'linear',
+        showgrid: true,
+        showticklabels: true,
+        title: 'Time (s)',
+        rangemode: 'tozero'
+    },
+    yaxis: {
+        anchor: 'x',
+        showgrid: true,
+        title: 'Throughput (Mbps)',
         rangemode: 'tozero'
     },
     font: {
@@ -194,9 +283,35 @@ const plotData = [{
     },
 }
 ] as any[];
+const plotLatencyData = [{
+    x: [] as number[],
+    y: [] as number[],
+    name: 'Latency',
+    mode: 'line',
+    xaxis: 'x',
+    yaxis: 'y',
+    line: {
+        color: '#ff0000',
+        width: 3
+    }
+}] as any[];
+
+const plotThroughputData = [{
+    x: [] as number[],
+    y: [] as number[],
+    name: 'Throughput',
+    mode: 'line',
+    xaxis: 'x',
+    yaxis: 'y',
+    line: {
+        color: '#0905ed',
+        width: 3
+    }
+}] as any[];
 
 const plot = Plotly.newPlot(document.getElementById('plot') as HTMLDivElement, plotData, plotLayout, plotConfig);
-
+const plotLatency = Plotly.newPlot(document.getElementById('plot_latency') as HTMLDivElement, plotLatencyData, plotLayoutLatency, plotConfig);
+const plotThroughput = Plotly.newPlot(document.getElementById('plot_throughput') as HTMLDivElement, plotThroughputData, plotLayoutThroughput, plotConfig);
 const player = new Player({
     url: params.get("url") || window.config.serverURL,
     vid: vidRef,
@@ -249,8 +364,12 @@ const startPlotting = () => {
         player.saveResultBySecond('tcRate', player.tcRate || 0, currentSec);
 
         plotData.forEach(p => (p.x as Plotly.Datum[]).push(currentSec));
+        plotLatencyData.forEach(p => (p.x as Plotly.Datum[]).push(currentSec));
+        plotThroughputData.forEach(p => (p.x as Plotly.Datum[]).push(currentSec));
         (plotData[0].y as Plotly.Datum[]).push(player.serverBandwidth / 1000000);
         (plotData[1].y as Plotly.Datum[]).push(player.tcRate / 1000000);
+        (plotLatencyData[0].y as Plotly.Datum[]).push((player.throughputs.get('avgSegmentLatency') || 0));
+        (plotThroughputData[0].y as Plotly.Datum[]).push((player.throughputs.get('chunk') || 0));
 
         // show max 60 seconds
         if (plotData[0].x.length > displayedHistory) {
@@ -265,7 +384,19 @@ const startPlotting = () => {
             y: Object.values(plotData).map(item => item.y),
         } as Plotly.Data;
 
+        const data_latency_update = {
+            x: Object.values(plotLatencyData).map(item => item.x),
+            y: Object.values(plotLatencyData).map(item => item.y),
+        } as Plotly.Data;
+
+        const data_throughput_update = {
+            x: Object.values(plotThroughputData).map(item => item.x),
+            y: Object.values(plotThroughputData).map(item => item.y),
+        } as Plotly.Data;
+
         Plotly.update(document.getElementById('plot') as Plotly.Root, data_update, plotLayout)
+        Plotly.update(document.getElementById('plot_latency') as Plotly.Root, data_latency_update, plotLayout)
+        Plotly.update(document.getElementById('plot_throughput') as Plotly.Root, data_throughput_update, plotLayout)
     }, playerRefreshInterval);
 };
 

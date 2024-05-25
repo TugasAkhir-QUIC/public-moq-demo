@@ -181,11 +181,6 @@ header {
   background-color: turquoise;
 }
 
-#plot {
-  margin-top: 20px;
-  margin-bottom: 20px;
-}
-
 #repo_info {
   margin-left: 17px;
   border-radius: 10px;
@@ -207,6 +202,13 @@ header {
 #toggle_log {
   color: white;
   font-size: 0.8rem;
+}
+
+/* create a grid for grid-plot class div with three column */
+.grid-plot {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
 }
 
 #log {
