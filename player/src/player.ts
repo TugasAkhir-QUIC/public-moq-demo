@@ -206,15 +206,15 @@ export class Player {
 		if (currentCategory === '0') {
 			sendMessage = true;
 			sendAuto = false;
-			this.currCategory = '';
+			this.currCategory = 'Stream';
 		} else if (currentCategory === '1') {
 			sendMessage = true;
 			sendAuto = false;
-			this.currCategory = '';
+			this.currCategory = 'Datagram';
 		} else if (currentCategory === '2') {
 			sendMessage = true;
 			sendAuto = false;
-			this.currCategory = '';
+			this.currCategory = 'Hybrid';
 		} else if(currentCategory === '3') {
 			sendMessage = true;
 			sendAuto = true;
@@ -1074,7 +1074,7 @@ export class Player {
 		const chunk_volume = document.querySelector('#stats .total_chunk_volume') as HTMLDivElement;
 		const elapsed_time = document.querySelector('#stats .elapsed_time') as HTMLDivElement;
 		const bw_active_bw = document.querySelector('#stats .active_bw') as HTMLDivElement;
-
+		const quic_type = document.querySelector('#stats .quic_type') as HTMLDivElement;
 
 		if (bw) {
 			bw.innerText = formatBits(this.serverBandwidth, 1).toString();
