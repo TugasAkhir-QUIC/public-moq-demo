@@ -369,7 +369,7 @@ const startPlotting = () => {
         (plotData[0].y as Plotly.Datum[]).push(player.serverBandwidth / 1000000);
         (plotData[1].y as Plotly.Datum[]).push(player.tcRate / 1000000);
         (plotLatencyData[0].y as Plotly.Datum[]).push((player.throughputs.get('avgSegmentLatency') || 0));
-        (plotThroughputData[0].y as Plotly.Datum[]).push((player.throughputs.get('chunk') || 0));
+        (plotThroughputData[0].y as Plotly.Datum[]).push((player.throughputs.get('chunk') || 0)/1000);
 
         // show max 60 seconds
         if (plotData[0].x.length > displayedHistory) {
