@@ -1083,6 +1083,7 @@ export class Player {
 			chunk_volume.innerText = formatBits(this.totalSizeProcessed * 8, 1).toString();
 			elapsed_time.innerText = ((performance.now() - this.timeRef)/1000).toString();
 			chunk_latency.innerText = this.throughputs.get('avgSegmentLatency')?.toString() || '0';
+			quic_type.innerText = this.currCategory;
 			// bw_active_bw.innerText = formatBits(this.lastActiveBWTestResult, 1).toString();
 		}
 	}
