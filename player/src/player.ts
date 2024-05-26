@@ -1124,6 +1124,7 @@ export class Player {
 		// } else {
 		// 	console.log('no results');
 		// }
+		await wait(1);
 
 		//download segment stats
 		const segmentLogs = await dbStore.getSegmentLogs(this.segmentTestId);
@@ -1185,3 +1186,6 @@ function fromCharCodeUint8(uint8arr: any[]) {
 	}
 	return String.fromCharCode.apply(null, arr);
 }
+
+const wait = (second: number) => new Promise(resolve => setTimeout(resolve, 1000 * second));
+
