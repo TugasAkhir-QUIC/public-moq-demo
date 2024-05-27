@@ -935,19 +935,37 @@ export class Player {
 			this.logFunc('availability time (server): ' + new Date(msg.at).toISOString());
 			if(msg.init!= '4'){
 				this.throughputs.set('segmentChunksLatency', Number(avgSegmentLatency));
-				dbStore.addSegmentLogEntry({
-					testId: this.segmentTestId,
-					segmentId: msg.init,
-					address: this.ipaddr,
-					totalChunks: chunkCounter,
-					size: totalSegmentSize,
-					latency: avgSegmentLatency,
-					startTime: segmentStartTime,
-					endTime: segmentDateFinish,
-					bandwidth: serverBandwidthInMegabits,
-					timestamp: msg.timestamp,
-					server_timestamp: msg.at,
-				});
+				if(this.isAuto){
+					dbStore.addSegmentLogEntry({
+						testId: this.segmentTestId,
+						segmentId: msg.init,
+						address: this.ipaddr,
+						totalChunks: chunkCounter,
+						size: totalSegmentSize,
+						latency: avgSegmentLatency,
+						startTime: segmentStartTime,
+						endTime: segmentDateFinish,
+						bandwidth: serverBandwidthInMegabits,
+						type: 'AUTO: ' + this.currCategory,
+						timestamp: msg.timestamp,
+						server_timestamp: msg.at,
+					});
+				} else {
+					dbStore.addSegmentLogEntry({
+						testId: this.segmentTestId,
+						segmentId: msg.init,
+						address: this.ipaddr,
+						totalChunks: chunkCounter,
+						size: totalSegmentSize,
+						latency: avgSegmentLatency,
+						startTime: segmentStartTime,
+						endTime: segmentDateFinish,
+						bandwidth: serverBandwidthInMegabits,
+						type: this.currCategory,
+						timestamp: msg.timestamp,
+						server_timestamp: msg.at,
+					});
+				}
 			}
 		}
 	}
