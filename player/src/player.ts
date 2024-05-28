@@ -894,7 +894,7 @@ export class Player {
 		segment.finish()
 		let segmentFinishTime = Date.now();
 		let serverBandwidth = this.serverBandwidth;
-		let serverBandwidthInMegabits = (serverBandwidth / 1_048_576).toFixed(3);
+		let serverBandwidthInMegabits = (serverBandwidth / 1000000).toFixed(3);
 		//judgement to change from streams to datagrams vice versa if auto is True;
 		if (this.isAuto){
 			//judgement of average bandwidth, average latency
@@ -1130,19 +1130,19 @@ export class Player {
 		} else {
 			console.log('no logs');
 		}
+		await wait(1);
 
-		// download results
-		// const results = await dbStore.getResults(testId || this.testId);
-		// if (results.length > 0) {
-		// 	const headers = Object.keys(results[0]);
-		// 	const csvContent = 'data:application/vnd.ms-excel;charset=utf-8,' + headers.join('\t') + '\n' + results.map(e => Object.values(e).join('\t')).join('\n');
-		// 	const encodedUri = encodeURI(csvContent);
-		// 	link.setAttribute('href', encodedUri);
-		// 	link.setAttribute('download', 'results_' + this.testId + '.xls');
-		// 	link.click();
-		// } else {
-		// 	console.log('no results');
-		// }
+		const results = await dbStore.getResults(testId || this.testId);
+		if (results.length > 0) {
+			const headers = Object.keys(results[0]);
+			const csvContent = 'data:application/vnd.ms-excel;charset=utf-8,' + headers.join('\t') + '\n' + results.map(e => Object.values(e).join('\t')).join('\n');
+			const encodedUri = encodeURI(csvContent);
+			link.setAttribute('href', encodedUri);
+			link.setAttribute('download', 'bandwidth_' + this.testId + '.xls');
+			link.click();
+		} else {
+			console.log('no results');
+		}
 		await wait(1);
 
 		//download segment stats
