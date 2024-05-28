@@ -361,7 +361,7 @@ const startPlotting = () => {
         // save results by time
         // these will be downloaded after the test
         player.saveResultBySecond('etp', player.serverBandwidth || 0, currentSec);
-        player.saveResultBySecond('tcRate', player.tcRate || 0, currentSec);
+        // player.saveResultBySecond('tcRate', player.tcRate || 0, currentSec);
 
         plotData.forEach(p => (p.x as Plotly.Datum[]).push(currentSec));
         plotLatencyData.forEach(p => (p.x as Plotly.Datum[]).push(currentSec));
