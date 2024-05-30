@@ -1,5 +1,5 @@
 # Put your interface name here
-INTERFACE=enp0s31f6
+INTERFACE=ens4
 RATE_MBIT=$1
 
 if [[ -z $RATE_MBIT ]]; then
