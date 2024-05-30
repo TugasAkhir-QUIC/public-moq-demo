@@ -795,7 +795,7 @@ export class Player {
 					const chunkSize = size + lastMoofSize; // bytes
 					totalChunkSize += chunkSize;
 					const chunkLatency = Math.round(lastMoofClockTime - msg.at);
-					chunkEnd = Date.now();
+					chunkEnd = performance.now() - moofClockTime;
 					++this.totalChunkCount;
 
 					dbStore.addLogEntry({
@@ -807,7 +807,6 @@ export class Player {
 						chunkDownloadDuration,
 						lastMoofDownloadDuration,
 						boxStartTime,
-						chunkStart: lastMoofClockTime,
 						chunkEnd,
 						chunkLatency,
 						msg_timestamp: msg.timestamp,
