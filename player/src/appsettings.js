@@ -17,7 +17,7 @@ window.config = {
     },
     activeBWTestInterval: 1000000,
     autoStart: false,
-    testDuration: 180,
+    testDuration: 120,
     swma_calculation_type: 'segment',
     swma_threshold: 5,
     swma_threshold_type: 'percentage',

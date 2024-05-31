@@ -1,5 +1,5 @@
 # Put your interface name here
-INTERFACE=enp0s31f6
+INTERFACE=ens4
 
 if tc qdisc show dev $INTERFACE | grep netem; then
     sudo tc qdisc del dev $INTERFACE root

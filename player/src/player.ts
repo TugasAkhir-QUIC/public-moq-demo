@@ -63,6 +63,7 @@ export class Player {
 	testId: string;
 	segmentTestId: string;
 	fragment: FragmentedMessageHandler
+	latencyData: any[] = [];
 	isAuto: boolean
 	constructor(props: any) {
 		this.vidRef = props.vid
@@ -99,7 +100,7 @@ export class Player {
 		this.video = new Track(new Source(this.mediaSource));
 		this.isAuto = false;
 		this.fragment = new FragmentedMessageHandler();
-		this.currCategory = '';
+		this.currCategory = 'Stream'; //default category
 		if (props.autoStart) {
 			this.start();
 		}
@@ -112,8 +113,8 @@ export class Player {
 		return 'l_' + (new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/g, '').replace('T', '_')) + '_' + Math.round(Math.random() * 10000);
 	};
 
-	saveResultBySecond = (name: string, value: number, second: number) => {
-		dbStore.addResultEntry({ testId: this.testId, name, value, second });
+	saveResultBySecond = (name: string, value: number, quicCategory: string, SWMAlatency: number, throughput:any, second: number) => {
+		dbStore.addResultEntry({ testId: this.testId, name, value, SWMAlatency, quicCategory, throughput, second});
 	};
 
 	start = async () => {
@@ -821,22 +822,17 @@ export class Player {
 					const stat = [chunkCounter, chunkSize, chunkDownloadDuration, lastMoofDownloadDuration, chunkDownloadDuration > 0 ? (chunkSize * 8 * 1000 / chunkDownloadDuration) : 0, chunkLatency, msg.timestamp];
 					this.chunkStats.push(stat);
 					chunkLatencies.push(chunkLatency);
-					// MAYBE REMOVE???
-					// if (chunkCounter === 1) { // TODO: IFRAME
-					// 	let filteredStats = [stat];
-					// 	// console.log("chunk 1")
-					// 	// console.log(filteredStats);
-					// 	const val = this.computeTPut(filteredStats);
-					// 	// TODO: UNCOMMENT LOG
-					// 	console.log('ifa calc', val, stat, this.throughputs.get('ifa'));
-					// 	// if the value is an outlier (100 times more than the last measurement)
-					// 	// discard it
-					// 	const lastVal = (this.throughputs.get('ifa') || 0);
-					// 	if (lastVal === 0 || val < lastVal * 100) {
-					// 		this.throughputs.set('ifa', val);
-					// 	}
-					// }
-
+					if (chunkLatencies.length > 1) {
+						let lastData = chunkLatencies.length-1;
+						let latency = chunkLatencies[lastData] - chunkLatencies[lastData - 1];
+						this.latencyData.push(latency)
+						console.log(latency, "LATENCY")
+						//SWMA Latency
+						let windowStart = Math.max(0, this.latencyData.length - 25);
+						let windowData = this.latencyData.slice(windowStart)
+						let windowSum = windowData.reduce((acc, val)=> acc + val, 0);
+						this.throughputs.set('SWMALatency', windowSum/windowData.length);
+					}
 					// if (this.totalChunkCount >= this.getSWMAWindowSize() && this.totalChunkCount % this.getSWMACalculationInterval() === 0) {
 					// 	const stats = this.chunkStats.slice(-this.getSWMAWindowSize());
 					// 	let filteredStats: any[] = this.filterStats(stats, this.getSWMAThreshold(), this.getSWMAThresholdType(), this.throughputs.get('swma') || 0);
@@ -847,13 +843,6 @@ export class Player {
 					// 		console.warn('tput is zero.');
 					// 	}
 
-					// }
-					//chunkThroughput
-					// const chunkTPut = this.computeChunkTPut([stat], segmentDownloadStart);
-					// //console.log("this is STATS : " + [stat]);
-					// if (chunkTPut > 0) {
-					// 	this.throughputs.set('chunk', chunkTPut);
-					// }
 				}
 				count++
 			}
@@ -867,13 +856,7 @@ export class Player {
 			if (segmentTPut > 0) {
 				this.throughputs.set('chunk', segmentTPut);
 			}
-			// console.log("total segment size", totalSegmentSize)
-			// console.log("player total size processed", this.totalSizeProcessed)
 
-			// if (count === 5 || count === 15) {
-			// 	count++
-			// 	continue
-			// }
 			segment.push(atom)
 			track.flush() // Flushes if the active segment has new samples
 		}
@@ -923,10 +906,10 @@ export class Player {
 
 		}
 		const segmentFinish = performance.now() - segmentDownloadStart;
-		let segmentDateFinish = new Date(segmentFinishTime).toISOString();
+		let segmentDateFinish = segmentFinishTime
 		if (isVideoSegment) {
 			this.logFunc('-----------------------------------------------------')
-			let segmentStartTime = new Date(performance.timeOrigin + segmentStartOffset).toISOString()
+			let segmentStartTime = performance.timeOrigin + segmentStartOffset
 			this.logFunc('segment chunk length: ' + chunkCounter);
 			this.logFunc('segment finish duration: ' + Math.round(segmentFinish));
 			this.logFunc('total segment size: ' + formatBits(totalSegmentSize * 8));
@@ -945,6 +928,7 @@ export class Player {
 						startTime: segmentStartTime,
 						endTime: segmentDateFinish,
 						bandwidth: serverBandwidthInMegabits,
+						throughput: this.throughputs.get('chunk'),
 						type: 'AUTO: ' + this.currCategory,
 						timestamp: msg.timestamp,
 						server_timestamp: msg.at,
@@ -960,6 +944,7 @@ export class Player {
 						startTime: segmentStartTime,
 						endTime: segmentDateFinish,
 						bandwidth: serverBandwidthInMegabits,
+						throughput: this.throughputs.get('chunk'),
 						type: this.currCategory,
 						timestamp: msg.timestamp,
 						server_timestamp: msg.at,
@@ -1092,6 +1077,7 @@ export class Player {
 		const elapsed_time = document.querySelector('#stats .elapsed_time') as HTMLDivElement;
 		const bw_active_bw = document.querySelector('#stats .active_bw') as HTMLDivElement;
 		const quic_type = document.querySelector('#stats .quic_type') as HTMLDivElement;
+		const swma_latency = document.querySelector('#stats .swma_chunk_latency') as HTMLDivElement;
 
 		if (bw) {
 			bw.innerText = formatBits(this.serverBandwidth, 1).toString();
@@ -1101,6 +1087,7 @@ export class Player {
 			elapsed_time.innerText = ((performance.now() - this.timeRef)/1000).toString();
 			chunk_latency.innerText = this.throughputs.get('avgSegmentLatency')?.toString() || '0';
 			quic_type.innerText = this.currCategory;
+			swma_latency.innerText = this.throughputs.get('SWMALatency')?.toString() || '0';
 			// bw_active_bw.innerText = formatBits(this.lastActiveBWTestResult, 1).toString();
 		}
 	}
