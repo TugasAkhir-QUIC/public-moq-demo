@@ -886,21 +886,21 @@ export class Player {
 				this.changeQuicType(2);
 			} else if (Number(serverBandwidthInMegabits) >= 4 && Number(avgSegmentLatency) < 100){
 				this.changeQuicType(0);
-			} else if (Number(serverBandwidthInMegabits) < 4 && Number(serverBandwidth) >= 2.6 && Number(avgSegmentLatency) > 150){
+			} else if (Number(serverBandwidthInMegabits) < 4 && Number(serverBandwidthInMegabits) >= 2.6 && Number(avgSegmentLatency) > 150){
 				this.changeQuicType(2);
-			} else if (Number(serverBandwidthInMegabits) < 4 && Number(serverBandwidth) >= 2.6 && Number(avgSegmentLatency) < 150){
+			} else if (Number(serverBandwidthInMegabits) < 4 && Number(serverBandwidthInMegabits) >= 2.6 && Number(avgSegmentLatency) < 150){
 				this.changeQuicType(0);
-			} else if (Number(serverBandwidthInMegabits) < 2.6 && Number(serverBandwidth) >= 1.3 && Number(avgSegmentLatency) > 200){
+			} else if (Number(serverBandwidthInMegabits) < 2.6 && Number(serverBandwidthInMegabits) >= 1.3 && Number(avgSegmentLatency) > 200){
 				this.changeQuicType(2);
-			} else if (Number(serverBandwidthInMegabits) < 2.6 && Number(serverBandwidth) >= 1.3 && Number(avgSegmentLatency) < 200){
+			} else if (Number(serverBandwidthInMegabits) < 2.6 && Number(serverBandwidthInMegabits) >= 1.3 && Number(avgSegmentLatency) < 200){
 				this.changeQuicType(0);
-			} else if (Number(serverBandwidthInMegabits) < 1.3 && Number(serverBandwidth) >= 0.325 && Number(avgSegmentLatency) > 250){
+			} else if (Number(serverBandwidthInMegabits) < 1.3 && Number(serverBandwidthInMegabits) >= 0.365 && Number(avgSegmentLatency) > 250){
 				this.changeQuicType(2);
-			} else if (Number(serverBandwidthInMegabits) < 1.3 && Number(serverBandwidth) >= 0.325 && Number(avgSegmentLatency) < 250){
+			} else if (Number(serverBandwidthInMegabits) < 1.3 && Number(serverBandwidthInMegabits) >= 0.365 && Number(avgSegmentLatency) < 250){
 				this.changeQuicType(0);
-			} else if (Number(serverBandwidthInMegabits) < 0.325 && Number(serverBandwidth) >= 0 && Number(avgSegmentLatency) > 300){
+			} else if (Number(serverBandwidthInMegabits) < 0.365 && Number(serverBandwidthInMegabits) >= 0 && Number(avgSegmentLatency) > 300){
 				this.changeQuicType(2);
-			} else if (Number(serverBandwidthInMegabits) < 0.325 && Number(serverBandwidth) >= 0 && Number(avgSegmentLatency) < 300){
+			} else if (Number(serverBandwidthInMegabits) < 0.365 && Number(serverBandwidthInMegabits) >= 0 && Number(avgSegmentLatency) < 300){
 				this.changeQuicType(0);
 			}
 
