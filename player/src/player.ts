@@ -894,13 +894,13 @@ export class Player {
 				this.changeQuicType(2);
 			} else if (Number(serverBandwidthInMegabits) < 2.6 && Number(serverBandwidthInMegabits) >= 1.3 && Number(avgSegmentLatency) < 200){
 				this.changeQuicType(0);
-			} else if (Number(serverBandwidthInMegabits) < 1.3 && Number(serverBandwidthInMegabits) >= 0.325 && Number(avgSegmentLatency) > 250){
+			} else if (Number(serverBandwidthInMegabits) < 1.3 && Number(serverBandwidthInMegabits) >= 0.365 && Number(avgSegmentLatency) > 250){
 				this.changeQuicType(2);
-			} else if (Number(serverBandwidthInMegabits) < 1.3 && Number(serverBandwidthInMegabits) >= 0.325 && Number(avgSegmentLatency) < 250){
+			} else if (Number(serverBandwidthInMegabits) < 1.3 && Number(serverBandwidthInMegabits) >= 0.365 && Number(avgSegmentLatency) < 250){
 				this.changeQuicType(0);
-			} else if (Number(serverBandwidthInMegabits) < 0.325 && Number(serverBandwidthInMegabits) >= 0 && Number(avgSegmentLatency) > 300){
+			} else if (Number(serverBandwidthInMegabits) < 0.365 && Number(serverBandwidthInMegabits) >= 0 && Number(avgSegmentLatency) > 300){
 				this.changeQuicType(2);
-			} else if (Number(serverBandwidthInMegabits) < 0.325 && Number(serverBandwidthInMegabits) >= 0 && Number(avgSegmentLatency) < 300){
+			} else if (Number(serverBandwidthInMegabits) < 0.365 && Number(serverBandwidthInMegabits) >= 0 && Number(avgSegmentLatency) < 300){
 				this.changeQuicType(0);
 			}
 
