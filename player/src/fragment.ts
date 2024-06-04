@@ -45,7 +45,7 @@ export class FragmentedMessageHandler {
 		let moof: Uint8Array = new Uint8Array();
 		const controller = this.segmentStreams.get(segmentID)
 		while (controller !== undefined) {
-			if (count === 1) { // 1 or 4
+			if (count === 4) { // 1 or 4
 				this.isDelayed.set(segmentID, false)
 			}
 			if (await r.done()) {
@@ -112,7 +112,7 @@ export class FragmentedMessageHandler {
 		});
 		setTimeout(() => {
 			this.cleanup(segmentID);
-		}, 2100); // 3000 (?)
+		}, 4000); // 3000 (?)
 		let r = new StreamReader(stream.getReader())
 		player.handleStream(r);
 	}

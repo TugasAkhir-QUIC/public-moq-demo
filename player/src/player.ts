@@ -826,7 +826,7 @@ export class Player {
 						let lastData = chunkLatencies.length-1;
 						let latency = chunkLatencies[lastData] - chunkLatencies[lastData - 1];
 						this.latencyData.push(latency)
-						console.log(latency, "LATENCY")
+						// console.log(latency, "LATENCY")
 						//SWMA Latency
 						let windowStart = Math.max(0, this.latencyData.length - 25);
 						let windowData = this.latencyData.slice(windowStart)
