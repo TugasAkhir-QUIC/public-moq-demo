@@ -804,9 +804,9 @@ func logtoCSV(quicType string, timeStamp int, segmentSize int, serverAddr string
 			return
 		}
 	}
-	if err := writeLogToCSV(fileName, quicType, timeStamp, segmentSize, now, serverAddr, clientAddr); err != nil {
-		log.Printf("Error writing to CSV log: %v", err)
-	}
+	//if err := writeLogToCSV(fileName, quicType, timeStamp, segmentSize, now, serverAddr, clientAddr); err != nil {
+	//	log.Printf("Error writing to CSV log: %v", err)
+	//}
 }
 
 func createCSVlog(filename string) error {
