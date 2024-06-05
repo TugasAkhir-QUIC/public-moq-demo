@@ -351,7 +351,7 @@ const startPlotting = () => {
         const currentSec = Math.round(timePassed / 1000);
 
         if (testDuration > 0 && currentSec === testDuration) {
-            // player.pauseOrResume(true);
+            player.pauseOrResume(true);
             player.downloadStats().then(results => {
                 console.log('results', results);
             });
