@@ -114,7 +114,13 @@ export class Player {
 	};
 
 	saveResultBySecond = (name: string, value: number, quicCategory: string, SWMAlatency: number, throughput:any, second: number) => {
-		dbStore.addResultEntry({ testId: this.testId, name, value, throughput, SWMAlatency, quicCategory, second});
+		dbStore.addResultEntry({ testId: this.testId, 
+			name,
+			Bandwidth: value, 
+			Throughput: throughput/1000000, 
+			SWMAlatency, 
+			quicCategory
+			});
 	};
 
 	start = async () => {
