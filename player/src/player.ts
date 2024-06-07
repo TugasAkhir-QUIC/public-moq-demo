@@ -883,34 +883,6 @@ export class Player {
 		let segmentFinishTime = Date.now();
 		let serverBandwidth = this.serverBandwidth;
 		let serverBandwidthInMegabits = (serverBandwidth / 1000000).toFixed(3);
-		//judgement to change from streams to datagrams vice versa if auto is True;
-		if (this.isAuto){
-			//judgement of average bandwidth, average latency
-			//Changing only to datagrams when the latency is greater than a number
-			//For Future Work: There must be a better way to do this. Like receiving the bitrates from init maybe? and then judge from there? idk.
-			if (Number(serverBandwidthInMegabits) >= 4 && Number(avgSegmentLatency) > 100){
-				this.changeQuicType(2);
-			} else if (Number(serverBandwidthInMegabits) >= 4 && Number(avgSegmentLatency) < 100){
-				this.changeQuicType(0);
-			} else if (Number(serverBandwidthInMegabits) < 4 && Number(serverBandwidthInMegabits) >= 2.6 && Number(avgSegmentLatency) > 100){
-				this.changeQuicType(2);
-			} else if (Number(serverBandwidthInMegabits) < 4 && Number(serverBandwidthInMegabits) >= 2.6 && Number(avgSegmentLatency) < 100){
-				this.changeQuicType(0);
-			} else if (Number(serverBandwidthInMegabits) < 2.6 && Number(serverBandwidthInMegabits) >= 1.3 && Number(avgSegmentLatency) > 100){
-				this.changeQuicType(2);
-			} else if (Number(serverBandwidthInMegabits) < 2.6 && Number(serverBandwidthInMegabits) >= 1.3 && Number(avgSegmentLatency) < 100){
-				this.changeQuicType(0);
-			} else if (Number(serverBandwidthInMegabits) < 1.3 && Number(serverBandwidthInMegabits) >= 0.365 && Number(avgSegmentLatency) > 100){
-				this.changeQuicType(2);
-			} else if (Number(serverBandwidthInMegabits) < 1.3 && Number(serverBandwidthInMegabits) >= 0.365 && Number(avgSegmentLatency) < 100){
-				this.changeQuicType(0);
-			} else if (Number(serverBandwidthInMegabits) < 0.365 && Number(serverBandwidthInMegabits) >= 0 && Number(avgSegmentLatency) > 100){
-				this.changeQuicType(2);
-			} else if (Number(serverBandwidthInMegabits) < 0.365 && Number(serverBandwidthInMegabits) >= 0 && Number(avgSegmentLatency) < 100){
-				this.changeQuicType(0);
-			}
-
-		}
 		const segmentFinish = performance.now() - segmentDownloadStart;
 		let segmentDateFinish = segmentFinishTime
 		if (isVideoSegment) {
@@ -957,6 +929,34 @@ export class Player {
 					});
 				}
 			}
+		}
+		//judgement to change from streams to datagrams vice versa if auto is True;
+		if (this.isAuto){
+			//judgement of average bandwidth, average latency
+			//Changing only to datagrams when the latency is greater than a number
+			//For Future Work: There must be a better way to do this. Like receiving the bitrates from init maybe? and then judge from there? idk.
+			if (Number(serverBandwidthInMegabits) >= 4 && Number(avgSegmentLatency) > 100){
+				this.changeQuicType(2);
+			} else if (Number(serverBandwidthInMegabits) >= 4 && Number(avgSegmentLatency) < 100){
+				this.changeQuicType(0);
+			} else if (Number(serverBandwidthInMegabits) < 4 && Number(serverBandwidthInMegabits) >= 2.6 && Number(avgSegmentLatency) > 100){
+				this.changeQuicType(2);
+			} else if (Number(serverBandwidthInMegabits) < 4 && Number(serverBandwidthInMegabits) >= 2.6 && Number(avgSegmentLatency) < 100){
+				this.changeQuicType(0);
+			} else if (Number(serverBandwidthInMegabits) < 2.6 && Number(serverBandwidthInMegabits) >= 1.3 && Number(avgSegmentLatency) > 100){
+				this.changeQuicType(2);
+			} else if (Number(serverBandwidthInMegabits) < 2.6 && Number(serverBandwidthInMegabits) >= 1.3 && Number(avgSegmentLatency) < 100){
+				this.changeQuicType(0);
+			} else if (Number(serverBandwidthInMegabits) < 1.3 && Number(serverBandwidthInMegabits) >= 0.365 && Number(avgSegmentLatency) > 100){
+				this.changeQuicType(2);
+			} else if (Number(serverBandwidthInMegabits) < 1.3 && Number(serverBandwidthInMegabits) >= 0.365 && Number(avgSegmentLatency) < 100){
+				this.changeQuicType(0);
+			} else if (Number(serverBandwidthInMegabits) < 0.365 && Number(serverBandwidthInMegabits) >= 0 && Number(avgSegmentLatency) > 100){
+				this.changeQuicType(2);
+			} else if (Number(serverBandwidthInMegabits) < 0.365 && Number(serverBandwidthInMegabits) >= 0 && Number(avgSegmentLatency) < 100){
+				this.changeQuicType(0);
+			}
+
 		}
 	}
 
