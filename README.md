@@ -67,12 +67,14 @@ why this needs to be done can be seen inside the Chrome section of the `README_w
 1. prepare a certificate, in this case we used Let's Encrypt certificates. Make sure to prepare that first 
 1. Build the Go project using `go build`
 1. use a service manager, in this case we used systemd and then create a service file `sudo nano /etc/systemd/system/myprogram.service`
-with its content like so, change as you please
+with its content like so, change as you please.
+Keep note that `ExecStart` must point to the built project while `WorkingDirectory` must point the server directory of the repo.
 ```[Unit]
 Description=My Go Program
 
 [Service]
 ExecStart=/path/to/deploy/myprogram
+WorkingDirectory=/path/to/server
 
 [Install]
 WantedBy=multi-user.target
