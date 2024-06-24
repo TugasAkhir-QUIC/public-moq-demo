@@ -59,6 +59,7 @@ why this needs to be done can be seen inside the Chrome section of the `README_w
 9. Demo can now be played.
 
 ## How To Start Deploying Server
+We used a linux server from GCP.
 ### Prequisites
 - https://github.com/quic-go/quic-go/wiki/UDP-Buffer-Sizes
 - A domain name
@@ -66,15 +67,15 @@ why this needs to be done can be seen inside the Chrome section of the `README_w
 1. in your linux server clone the repo and also make sure to have all the prequisites to run it.
 1. prepare a certificate, in this case we used Let's Encrypt certificates. Make sure to prepare that first 
 1. Build the Go project using `go build`
-1. use a service manager, in this case we used systemd and then create a service file `sudo nano /etc/systemd/system/myprogram.service`
+1. use a service manager, in this case we used systemd and then create a service file `sudo nano /etc/systemd/system/<program name>.service`
 with its content like so, change as you please.
 Keep note that `ExecStart` must point to the built project while `WorkingDirectory` must point the server directory of the repo.
 ```[Unit]
-Description=My Go Program
+Description=<program description>
 
 [Service]
-ExecStart=/path/to/deploy/myprogram
-WorkingDirectory=/path/to/server
+ExecStart=</path/to/deploy/myprogram>
+WorkingDirectory=</path/to/server>
 
 [Install]
 WantedBy=multi-user.target
