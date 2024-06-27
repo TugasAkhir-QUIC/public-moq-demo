@@ -3,7 +3,6 @@ package warp
 import (
 	"context"
 	"encoding/binary"
-	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,9 +11,6 @@ import (
 	"io"
 	"log"
 	"math"
-	"os"
-	"path/filepath"
-	"strconv"
 	"time"
 
 	"github.com/TugasAkhir-QUIC/quic-go"
@@ -414,7 +410,7 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 	// HYBRID SEGMENT WRITTEN
 	//fmt.Printf("CATEGORY: %d\n", s.category)
 	fmt.Printf("* id: %s ts: %d etp: %d segment size: %d box count:%d chunk count: %d\n", init_message.Segment.Init, init_message.Segment.Timestamp, init_message.Segment.ETP, segment_size, box_count, chunk_count)
-	logtoCSV("HYBRID", init_message.Segment.Timestamp, segment_size, s.inner.LocalAddr().String(), s.inner.RemoteAddr().String(), s.isAuto)
+	//logtoCSV("HYBRID", init_message.Segment.Timestamp, segment_size, s.inner.LocalAddr().String(), s.inner.RemoteAddr().String(), s.isAuto)
 	err = datagram.Close()
 	if err != nil {
 		return fmt.Errorf("failed to close segemnt datagram: %w", err)
@@ -586,7 +582,7 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 	fmt.Printf("DATAGRAM SEGMENT WRITTEN || ")
 	fmt.Printf("* id: %s ts: %d etp: %d segment size: %d box count:%d chunk count: %d\n", init_message.Segment.Init, init_message.Segment.Timestamp, init_message.Segment.ETP, segment_size, box_count, chunk_count)
 
-	logtoCSV("DATAGRAM", init_message.Segment.Timestamp, segment_size, s.inner.LocalAddr().String(), s.inner.RemoteAddr().String(), s.isAuto)
+	//logtoCSV("DATAGRAM", init_message.Segment.Timestamp, segment_size, s.inner.LocalAddr().String(), s.inner.RemoteAddr().String(), s.isAuto)
 	err = datagram.Close()
 	if err != nil {
 		return fmt.Errorf("failed to close segemnt datagram: %w", err)
@@ -726,7 +722,7 @@ func (s *Session) writeSegment(ctx context.Context, segment *MediaSegment) (err 
 	// STREAM SEGMENT WRITTEN
 	//fmt.Printf("STREAM SEGMENT WRITTEN || ")
 	fmt.Printf("* id: %s ts: %d etp: %d segment size: %d box count:%d chunk count: %d\n", init_message.Segment.Init, init_message.Segment.Timestamp, init_message.Segment.ETP, segment_size, box_count, chunk_count)
-	logtoCSV("STREAM", init_message.Segment.Timestamp, segment_size, s.inner.LocalAddr().String(), s.inner.RemoteAddr().String(), s.isAuto)
+	//logtoCSV("STREAM", init_message.Segment.Timestamp, segment_size, s.inner.LocalAddr().String(), s.inner.RemoteAddr().String(), s.isAuto)
 	err = stream.Close()
 	if err != nil {
 		return fmt.Errorf("failed to close segemnt stream: %w", err)
@@ -788,64 +784,63 @@ func (s *Session) sendPong(msg *MessagePing, ctx context.Context) (err error) {
 }
 
 // External Logging Function to ../logs
-func logtoCSV(quicType string, timeStamp int, segmentSize int, serverAddr string, clientAddr string, isAuto bool) {
-	now := time.Now()
-	baseDir := filepath.Join("internal", "logs")
-	var fileName string
-	if isAuto {
-		fmt.Printf("WRITING AUTO PROFILE LOG FILE")
-		fileName = filepath.Join(baseDir, fmt.Sprintf("%s-%d-%02d-%02d-%02d.csv", "AUTO", now.Year(), now.Month(), now.Day(), now.Hour()))
-	} else {
-		fileName = filepath.Join(baseDir, fmt.Sprintf("%s-%d-%02d-%02d-%02d.csv", quicType, now.Year(), now.Month(), now.Day(), now.Hour()))
-	}
-	if _, err := os.Stat(fileName); os.IsNotExist(err) {
-		if err := createCSVlog(fileName); err != nil {
-			log.Printf("Error creating CSV log: %v", err)
-			return
-		}
-	}
-	//if err := writeLogToCSV(fileName, quicType, timeStamp, segmentSize, now, serverAddr, clientAddr); err != nil {
-	//	log.Printf("Error writing to CSV log: %v", err)
-	//}
-}
+// UNCOMMENT IF: wanting to count packets that are being sent
+// IF UNCOMMENT: please also to add a directory inside of internal named "logs"
+//func logtoCSV(quicType string, timeStamp int, segmentSize int, serverAddr string, clientAddr string, isAuto bool) {
+//	now := time.Now()
+//	baseDir := filepath.Join("internal", "logs")
+//	var fileName string
+//	if isAuto {
+//		fmt.Printf("WRITING AUTO PROFILE LOG FILE")
+//		fileName = filepath.Join(baseDir, fmt.Sprintf("%s-%d-%02d-%02d-%02d.csv", "AUTO", now.Year(), now.Month(), now.Day(), now.Hour()))
+//	} else {
+//		fileName = filepath.Join(baseDir, fmt.Sprintf("%s-%d-%02d-%02d-%02d.csv", quicType, now.Year(), now.Month(), now.Day(), now.Hour()))
+//	}
+//	if _, err := os.Stat(fileName); os.IsNotExist(err) {
+//		if err := createCSVlog(fileName); err != nil {
+//			log.Printf("Error creating CSV log: %v", err)
+//			return
+//		}
+//	}
+//}
 
-func createCSVlog(filename string) error {
-	file, err := os.Create(filename)
-	if err != nil {
-		log.Fatalf("failed to create file: %v", err)
-	}
-	defer file.Close()
+//func createCSVlog(filename string) error {
+//	file, err := os.Create(filename)
+//	if err != nil {
+//		log.Fatalf("failed to create file: %v", err)
+//	}
+//	defer file.Close()
+//
+//	writer := csv.NewWriter(file)
+//	defer writer.Flush()
+//
+//	header := []string{"Connection Type", "Server Time", "Timestamp/ts", "Segment Size", "Server Address", "Client Address"}
+//	if err := writer.Write(header); err != nil {
+//		log.Fatalf("failed to write header to csv: %v", err)
+//	}
+//	return nil
+//}
 
-	writer := csv.NewWriter(file)
-	defer writer.Flush()
-
-	header := []string{"Connection Type", "Server Time", "Timestamp/ts", "Segment Size", "Server Address", "Client Address"}
-	if err := writer.Write(header); err != nil {
-		log.Fatalf("failed to write header to csv: %v", err)
-	}
-	return nil
-}
-
-func writeLogToCSV(filename string, quicType string, timestamp int, segmentSize int, now time.Time, serverAddr string, clientAddr string) error {
-	file, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY, os.ModeAppend)
-	if err != nil {
-		return fmt.Errorf("failed to open file: %w", err)
-	}
-	defer file.Close()
-
-	writer := csv.NewWriter(file)
-	defer writer.Flush()
-
-	record := []string{
-		fmt.Sprintf("QUIC-%s", quicType),
-		strconv.FormatInt(now.Unix(), 10),
-		fmt.Sprintf("%d", timestamp),
-		fmt.Sprintf("%d", segmentSize),
-		serverAddr,
-		clientAddr,
-	}
-	if err := writer.Write(record); err != nil {
-		return fmt.Errorf("failed to write record to csv: %w", err)
-	}
-	return nil
-}
+//func writeLogToCSV(filename string, quicType string, timestamp int, segmentSize int, now time.Time, serverAddr string, clientAddr string) error {
+//	file, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY, os.ModeAppend)
+//	if err != nil {
+//		return fmt.Errorf("failed to open file: %w", err)
+//	}
+//	defer file.Close()
+//
+//	writer := csv.NewWriter(file)
+//	defer writer.Flush()
+//
+//	record := []string{
+//		fmt.Sprintf("QUIC-%s", quicType),
+//		strconv.FormatInt(now.Unix(), 10),
+//		fmt.Sprintf("%d", timestamp),
+//		fmt.Sprintf("%d", segmentSize),
+//		serverAddr,
+//		clientAddr,
+//	}
+//	if err := writer.Write(record); err != nil {
+//		return fmt.Errorf("failed to write record to csv: %w", err)
+//	}
+//	return nil
+//}
