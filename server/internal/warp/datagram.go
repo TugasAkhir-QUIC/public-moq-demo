@@ -27,7 +27,7 @@ func NewDatagram(inner *webtransport.Session) (d *Datagram) {
 	d.ID = uint16(atomic.AddInt32(&idCounter, 1) % 65536)
 	d.chunkNumber = 0
 	d.inner = inner
-	d.maxSize = 1408 // // gatau kenapa skip 2 detik diawal kalau segini
+	d.maxSize = 1250 // // gatau kenapa skip 2 detik diawal kalau segini
 	// diatas 1415 (1392 + header(23)), diterima client sudah dipotong2
 	// cek const MaxPacketBufferSize = 1452 di quic-go
 	return d
