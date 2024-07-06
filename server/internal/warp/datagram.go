@@ -1,189 +1,122 @@
 package warp
 
 import (
-	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"github.com/TugasAkhir-QUIC/webtransport-go"
-	"sync"
+	"sync/atomic"
 )
 
-const (
-	isSegment  = byte(1)
-	notSegment = byte(0)
-	maxSize    = 1100 // more than 1300, the client won't pick it up
-)
+// TODO: mulai dari awal untuk setiap koneksi
+var idCounter int32 = -1
 
 // Wrapper around webtransport.Session to make Write non-blocking.
 // Otherwise we can't write to multiple concurrent streams in the same goroutine.
 type Datagram struct {
-	inner *webtransport.Session
+	inner       *webtransport.Session
+	ID          uint16
+	chunkNumber uint8
+	maxSize     int
 
 	chunks [][]byte
-	closed bool
-	err    error
-
-	notify chan struct{}
-	mutex  sync.Mutex
 }
 
 func NewDatagram(inner *webtransport.Session) (d *Datagram) {
 	d = new(Datagram)
+	d.ID = uint16(atomic.AddInt32(&idCounter, 1) % 65536)
+	d.chunkNumber = 0
 	d.inner = inner
-	d.notify = make(chan struct{})
+	d.maxSize = 1408 // // gatau kenapa skip 2 detik diawal kalau segini
+	// diatas 1415 (1392 + header(23)), diterima client sudah dipotong2
+	// cek const MaxPacketBufferSize = 1452 di quic-go
 	return d
 }
 
-func (d *Datagram) Run(ctx context.Context) (err error) {
-	defer func() {
-		d.mutex.Lock()
-		d.err = err
-		d.mutex.Unlock()
-	}()
-
-	for {
-		d.mutex.Lock()
-
-		chunks := d.chunks
-		notify := d.notify
-		//closed := d.closed
-
-		d.chunks = d.chunks[len(d.chunks):]
-		d.mutex.Unlock()
-
-		for _, chunk := range chunks {
-			err = d.inner.SendDatagram(chunk)
-			if err != nil {
-				return err
-			}
-		}
-
-		//if closed {
-		//	return d.inner.Close()
-		//}
-
-		if len(chunks) == 0 {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-notify:
-			}
-		}
-	}
-}
-
-// WriteSegment [isSegment][segmentID][chunkID][chunkNumber][fragmentNumber][fragmentTotal]
-func (d *Datagram) WriteSegment(buf []byte, segmentId string, chunkId string, chunkNumber int) (err error) {
-	chunkLength := int64(len(buf))
-	n := int(chunkLength / maxSize)
-	if n == 0 {
-		var chunkNumberBuffer [2]byte
-		var fragmentNumberBuffer [2]byte
-		var fragmentTotalBuffer [2]byte
-		binary.BigEndian.PutUint16(chunkNumberBuffer[:], uint16(chunkNumber))
-		binary.BigEndian.PutUint16(fragmentNumberBuffer[:], uint16(0))
-		binary.BigEndian.PutUint16(fragmentTotalBuffer[:], uint16(1))
-		var headerF []byte
-		headerF = append(headerF, isSegment)
-
-		headerF = append(headerF, []byte(segmentId)...)
-		headerF = append(headerF, []byte(chunkId)...)
-		headerF = append(headerF, chunkNumberBuffer[:]...)
-		headerF = append(headerF, fragmentNumberBuffer[:]...)
-		headerF = append(headerF, fragmentTotalBuffer[:]...)
-
-		_, err = d.Write(append(headerF, buf...))
-		if err != nil {
-			return err
-		}
-		return nil
-	}
-	totalFragments := n
-	if chunkLength%maxSize != 0 {
-		totalFragments += 1
-	}
-	var fragmentTotalBuffer [2]byte
-	binary.BigEndian.PutUint16(fragmentTotalBuffer[:], uint16(totalFragments))
-	// TODO: make sure totalFragments <  65,535
-	for i := 0; i < totalFragments; i++ {
-		start := i * maxSize
-		var end int
-		if i == n {
-			end = start + int(chunkLength%maxSize)
-		} else {
-			end = start + maxSize
-		}
-
-		var chunkNumberBuffer [2]byte
-		var fragmentNumberBuffer [2]byte
-		binary.BigEndian.PutUint16(chunkNumberBuffer[:], uint16(chunkNumber))
-		binary.BigEndian.PutUint16(fragmentNumberBuffer[:], uint16(i))
-		var headerF []byte
-		headerF = append(headerF, isSegment)
-
-		headerF = append(headerF, []byte(segmentId)...)
-		headerF = append(headerF, []byte(chunkId)...)
-		headerF = append(headerF, chunkNumberBuffer[:]...)
-		headerF = append(headerF, fragmentNumberBuffer[:]...)
-		headerF = append(headerF, fragmentTotalBuffer[:]...)
-
-		_, err = d.Write(append(headerF, buf[start:end]...))
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
+//func (d *Datagram) Write(buf []byte) (m int, err error) {
+//	chunkLength := len(buf)
+//	totalFragments := chunkLength / d.maxSize
+//	if totalFragments == 0 {
+//		header := d.generateHeader(uint16(0), uint16(1))
+//		err = d.inner.SendDatagram(append(header, buf...))
+//		if err != nil {
+//			return 0, err
+//		}
+//		d.chunkNumber++
+//		return chunkLength, nil
+//	}
+//	totalFragments++
+//	// TODO: make sure totalFragments <  65,535
+//	for i := 0; i < totalFragments; i++ {
+//		start := i * d.maxSize
+//		var end int
+//		if i == totalFragments-1 {
+//			end = start + chunkLength%d.maxSize
+//		} else {
+//			end = start + d.maxSize
+//		}
+//
+//		header := d.generateHeader(uint16(i), uint16(totalFragments))
+//		err := d.inner.SendDatagram(append(header, buf[start:end]...))
+//		if err != nil {
+//			return len(buf[:start]), err
+//		}
+//	}
+//	d.chunkNumber++
+//
+//	return chunkLength, nil
+//}
 
 func (d *Datagram) Write(buf []byte) (n int, err error) {
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
-
-	if d.err != nil {
-		return 0, d.err
+	chunkLength := len(buf)
+	totalFragments := chunkLength / d.maxSize
+	if chunkLength%d.maxSize != 0 {
+		totalFragments++
 	}
+	// TODO: make sure totalFragments <  65,535
+	for i := 0; i < totalFragments; i++ {
+		start := i * d.maxSize
+		var end int
+		if i == totalFragments-1 && chunkLength%d.maxSize != 0 {
+			end = start + chunkLength%d.maxSize
+		} else {
+			end = start + d.maxSize
+		}
 
-	if d.closed {
-		return 0, fmt.Errorf("closed")
+		header := d.generateHeader(uint16(i), uint16(totalFragments))
+		err := d.inner.SendDatagram(append(header, buf[start:end]...))
+		if err != nil {
+			return len(buf[:start]), err
+		}
 	}
-
-	// Make a copy of the buffer so it'd long lived
-	buf = append([]byte{}, buf...)
-	d.chunks = append(d.chunks, buf)
-
-	// Wake up the writer
-	close(d.notify)
-	d.notify = make(chan struct{})
+	d.chunkNumber++
 
 	return len(buf), nil
 }
 
-func (d *Datagram) GetMessage(msg Message) (raw []byte, err error) {
-	payload, err := json.Marshal(msg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal message: %w", err)
-	}
+func (d *Datagram) generateHeader(fragmentNumber uint16, fragmentTotal uint16) []byte {
+	var segmentIdBuffer [2]byte
+	binary.BigEndian.PutUint16(segmentIdBuffer[:], d.ID)
+	var fragmentNumberBuffer [2]byte
+	binary.BigEndian.PutUint16(fragmentNumberBuffer[:], fragmentNumber)
+	var fragmentTotalBuffer [2]byte
+	binary.BigEndian.PutUint16(fragmentTotalBuffer[:], fragmentTotal)
 
-	var size [4]byte
-	binary.BigEndian.PutUint32(size[:], uint32(len(payload)+8))
-
-	var msgByte []byte
-	msgByte = append(msgByte, size[:]...)
-	msgByte = append(msgByte, []byte("warp")...)
-	msgByte = append(msgByte, payload...)
-	return msgByte, nil
+	var header []byte
+	header = append(header, segmentIdBuffer[:]...)
+	header = append(header, d.chunkNumber)
+	header = append(header, fragmentNumberBuffer[:]...)
+	header = append(header, fragmentTotalBuffer[:]...)
+	return header
 }
 
-func (d *Datagram) WriteMessage(msg Message, raw []byte) (err error) {
+func (d *Datagram) WriteMessage(msg Message) (err error) {
 	payload, err := json.Marshal(msg)
 	if err != nil {
 		return fmt.Errorf("failed to marshal message: %w", err)
 	}
 
 	var msgByte []byte
-	msgByte = append(msgByte, notSegment)
 
 	var size [4]byte
 	binary.BigEndian.PutUint32(size[:], uint32(len(payload)+8))
@@ -191,11 +124,9 @@ func (d *Datagram) WriteMessage(msg Message, raw []byte) (err error) {
 	msgByte = append(msgByte, size[:]...)
 	msgByte = append(msgByte, []byte("warp")...)
 	msgByte = append(msgByte, payload...)
-	if raw != nil {
-		msgByte = append(msgByte, raw...)
-	}
-	if len(msgByte) > 14999 {
-		return fmt.Errorf("init message that is bigger than 15000 bytes is not yet supported") // It will be splitted if the size is more than 15000
+
+	if len(msgByte) > d.maxSize {
+		return fmt.Errorf("message that is bigger than %d bytes is not yet supported", d.maxSize) // It will be splitted if the size is more than 15000
 	}
 	_, err = d.Write(msgByte)
 	if err != nil {
@@ -205,27 +136,29 @@ func (d *Datagram) WriteMessage(msg Message, raw []byte) (err error) {
 	return nil
 }
 
-//func (s *Datagram) WriteCancel(code webtransport.StreamErrorCode) {
-//	s.inner.CancelWrite(code)
-//}
-//
-//func (s *Datagram) SetPriority(prio int) {
-//	s.inner.SetPriority(prio)
-//}
-
 func (d *Datagram) Close() (err error) {
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
+	var segmentIdBuffer [2]byte
+	binary.BigEndian.PutUint16(segmentIdBuffer[:], d.ID)
 
-	if d.err != nil {
-		return d.err
+	payload := append(segmentIdBuffer[:], d.chunkNumber)
+
+	var msgByte []byte
+
+	var size [4]byte
+	binary.BigEndian.PutUint32(size[:], uint32(len(payload)+8))
+
+	msgByte = append(msgByte, size[:]...)
+	msgByte = append(msgByte, []byte("finw")...)
+	msgByte = append(msgByte, payload...)
+
+	if len(msgByte) > d.maxSize {
+		return fmt.Errorf("message that is bigger than %d bytes is not yet supported", d.maxSize) // It will be splitted if the size is more than 15000
 	}
 
-	d.closed = true
-
-	// Wake up the writer
-	close(d.notify)
-	d.notify = make(chan struct{})
+	_, err = d.Write(msgByte)
+	if err != nil {
+		return fmt.Errorf("failed to write message: %w", err)
+	}
 
 	return nil
 }

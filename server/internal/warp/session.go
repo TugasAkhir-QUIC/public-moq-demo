@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/TugasAkhir-QUIC/webtransport-go"
-	"github.com/google/uuid"
 	"io"
 	"log"
 	"math"
@@ -164,10 +163,18 @@ func (s *Session) handleStream(ctx context.Context, stream webtransport.ReceiveS
 
 func (s *Session) runInit(ctx context.Context) (err error) {
 	for _, init := range s.inits {
-		err = s.writeInit(ctx, init)
-		if err != nil {
-			return fmt.Errorf("failed to write init stream: %w", err)
+		if s.category == 0 || s.category == 2 {
+			err = s.writeInit(ctx, init)
+			if err != nil {
+				return fmt.Errorf("failed to write init stream: %w", err)
+			}
+		} else if s.category == 1 {
+			err = s.writeInitDatagram(ctx, init)
+			if err != nil {
+				return fmt.Errorf("failed to write init stream: %w", err)
+			}
 		}
+		// TODO: other category
 	}
 
 	return nil
@@ -205,12 +212,13 @@ func (s *Session) runAudio(ctx context.Context) (err error) {
 		} else if s.category == 1 {
 			err = s.writeSegmentDatagram(ctx, segment)
 			if err != nil {
+				fmt.Println(err)
 				return fmt.Errorf("failed to write segment datagram: %w", err)
 			}
 		} else if s.category == 2 {
 			err = s.writeSegmentHybrid(ctx, segment)
 			if err != nil {
-				return fmt.Errorf("failed to write segment datagram: %w", err)
+				return fmt.Errorf("failed to write segment hybrid: %w", err)
 			}
 		}
 
@@ -251,12 +259,13 @@ func (s *Session) runVideo(ctx context.Context) (err error) {
 		} else if s.category == 1 {
 			err = s.writeSegmentDatagram(ctx, segment)
 			if err != nil {
+				fmt.Println(err)
 				return fmt.Errorf("failed to write segment datagram: %w", err)
 			}
 		} else if s.category == 2 {
 			err = s.writeSegmentHybrid(ctx, segment)
 			if err != nil {
-				return fmt.Errorf("failed to write segment datagram: %w", err)
+				return fmt.Errorf("failed to write segment hybrid: %w", err)
 			}
 		}
 	}
@@ -297,10 +306,34 @@ func (s *Session) writeInit(ctx context.Context, init *MediaInit) (err error) {
 	return nil
 }
 
+func (s *Session) writeInitDatagram(ctx context.Context, init *MediaInit) (err error) {
+	datagram := NewDatagram(s.inner)
+
+	err = datagram.WriteMessage(Message{
+		Init: &MessageInit{Id: init.ID},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to write init header: %w", err)
+	}
+
+	_, err = datagram.Write(init.Raw)
+	if err != nil {
+		return fmt.Errorf("failed to write init data: %w", err)
+	}
+
+	err = datagram.Close()
+	if err != nil {
+		return fmt.Errorf("failed to close segemnt datagram: %w", err)
+	}
+
+	return nil
+}
+
 func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment) (err error) {
 	// Wrap the stream in an object that buffers writes instead of blocking.
 	datagram := NewDatagram(s.inner)
-	s.streams.Add(datagram.Run)
+	datagramStart := 3
+	datagram.chunkNumber = uint8(datagramStart)
 
 	temp, err := s.inner.OpenUniStreamSync(ctx)
 	if err != nil {
@@ -346,14 +379,13 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 		},
 	}
 
-	segmentId := uuid.New().String()[:8]
-	err = stream.WriteMessageAuto(segmentId, init_message)
+	segmentId := datagram.ID
+	err = stream.WriteMessageHybrid(segmentId, init_message)
 	if err != nil {
 		return fmt.Errorf("failed to write segment data: %w", err)
 	}
 
 	count := 1
-	chunkId := uuid.New().String()[:8]
 	var chunk []byte
 	for {
 		// Get the next fragment
@@ -379,7 +411,7 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 			}
 		}
 
-		if count < 3 {
+		if count < datagramStart {
 			_, err = stream.Write(buf)
 			if err != nil {
 				return fmt.Errorf("failed to write segment data: %w", err)
@@ -395,11 +427,10 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 		}
 
 		if string(buf[4:8]) == "mdat" || string(buf[4:8]) == "styp" {
-			count++
-			chunkId = uuid.New().String()[:8]
 			chunk = append(chunk, buf...)
-			err = datagram.WriteSegment(chunk, segmentId, chunkId, count)
+			_, err = datagram.Write(chunk)
 			chunk = nil
+			count++
 			if err != nil {
 				return fmt.Errorf("failed to write segment data: %w", err)
 			}
@@ -425,62 +456,17 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 }
 
 func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegment) (err error) {
-
-	// Wrap the stream in an object that buffers writes instead of blocking.
 	datagram := NewDatagram(s.inner)
-	s.streams.Add(datagram.Run)
-
-	//defer func() {
-	//	if err != nil {
-	//		stream.WriteCancel(1)
-	//	}
-	//}()
 
 	ms := int(segment.timestamp / time.Millisecond)
-
-	// newer segments take priority
-	//stream.SetPriority(ms)
+	if ms == 0 {
+		datagram.maxSize = 1250
+	}
 
 	tcRate := s.server.tcRate
 	if tcRate == -1 {
 		tcRate = 0
 	}
-
-	/*
-
-			Segments on the Wire
-			------------------------------------------------------
-		    [chunk_S1_N] ...  [chunk_S1_1]  [segment 1 init]
-			------------------------------------------------------
-
-			Stream multiplexing in QUIC:
-			-----------------------------------------------------------
-		    [chunk_S1_N]  ..[chunk_S2_M] .. [chunk_S1_2]...[chunk_S1_1]
-			----------------------------------------------------------
-
-			Head of Line Blocking Problem in TCP:
-			------------------------------------
-			TCP Buffer
-			Pipeline
-			|    x   | c_s1_1 Head of line blocking
-			| c_s1_2 |
-			| c_s1_3 |
-			| c_s2_1 |
-			| c_s1_4 |
-
-			Quic treats each stream differently
-			-----------------------------------
-		    Stream 1
-			|    x   |
-			| c_s1_2 |
-			| c_s1_3 |
-			| c_s1_4 |
-
-			Stream 2
-			| c_s2_1 |
-			|        |
-
-	*/
 
 	segment_size := 0
 	box_count := 0
@@ -501,21 +487,13 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 		},
 	}
 
-	segmentId := uuid.New().String()[:8]
-	chunkId := uuid.New().String()[:8]
-	count := 0
+	err = datagram.WriteMessage(init_message)
+	if err != nil {
+		return fmt.Errorf("failed to write segment header: %w", err)
+	}
 
-	message, err := datagram.GetMessage(init_message)
-	if err != nil {
-		return fmt.Errorf("failed to write segment data: %w", err)
-	}
-	err = datagram.WriteSegment(message, segmentId, chunkId, count)
-	if err != nil {
-		return fmt.Errorf("failed to write segment data: %w", err)
-	}
-	count++
-	chunkId = uuid.New().String()[:8]
 	var chunk []byte
+	count := 0
 	for {
 		// Get the next fragment
 		start := time.Now().UnixMilli()
@@ -539,38 +517,16 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 				fmt.Printf("* chunk: %d size: %d time offset: %d\n", chunk_count, chunk_size, time.Now().UnixMilli()-start)
 			}
 		}
-		//if count == 5 || count == 7 {
-		//	count++
-		//	time.AfterFunc(50*time.Microsecond, func() {
-		//		datagram.WriteSegment(buf, segmentId, chunkId, 0, count)
-		//	})
-		//	continue
-		//}
-
-		// to generate chunk dropped
-		//if string(buf[4:8]) == "mdat" && (count == 6 || count == 7) {
-		//	count++
-		//	chunkId = uuid.New().String()[:8]
-		//	chunk = nil
-		//	continue
-		//}
-		//if string(buf[4:8]) == "moof" && (count == 15) {
-		//	continue
-		//}
-		//if segment.Init.ID != "4" {
-		//	fmt.Println(segmentId, string(buf[4:8]), count, chunkId)
-		//}
 
 		if string(buf[4:8]) == "moof" {
 			chunk = append(chunk, buf...)
 		}
 
 		if string(buf[4:8]) == "mdat" || string(buf[4:8]) == "styp" {
-			count++
-			chunkId = uuid.New().String()[:8]
 			chunk = append(chunk, buf...)
-			err = datagram.WriteSegment(chunk, segmentId, chunkId, count)
+			_, err = datagram.Write(chunk)
 			chunk = nil
+			count++
 			if err != nil {
 				return fmt.Errorf("failed to write segment data: %w", err)
 			}
@@ -579,9 +535,8 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 
 	// for debug purposes
 	//fmt.Printf("CATEGORY: %d\n", s.category)
-	fmt.Printf("DATAGRAM SEGMENT WRITTEN || ")
-	fmt.Printf("* id: %s ts: %d etp: %d segment size: %d box count:%d chunk count: %d\n", init_message.Segment.Init, init_message.Segment.Timestamp, init_message.Segment.ETP, segment_size, box_count, chunk_count)
-
+	//fmt.Printf("DATAGRAM SEGMENT WRITTEN || ")
+	fmt.Printf("* id: %s ts: %d etp: %d segment size: %d box count:%d chunk count: %d\n", init_message.Segment.Init, init_message.Segment.Timestamp, init_message.Segment.ETP, segment_size, box_count, count)
 	//logtoCSV("DATAGRAM", init_message.Segment.Timestamp, segment_size, s.inner.LocalAddr().String(), s.inner.RemoteAddr().String(), s.isAuto)
 	err = datagram.Close()
 	if err != nil {
@@ -665,7 +620,6 @@ func (s *Session) writeSegment(ctx context.Context, segment *MediaSegment) (err 
 	*/
 
 	err = stream.WriteMessage(init_message)
-
 	if err != nil {
 		return fmt.Errorf("failed to write segment header: %w", err)
 	}

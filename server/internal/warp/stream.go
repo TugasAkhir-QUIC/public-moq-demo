@@ -126,7 +126,7 @@ func (s *Stream) WriteMessage(msg Message) (err error) {
 	return nil
 }
 
-func (s *Stream) WriteMessageAuto(segmentId string, msg Message) (err error) {
+func (s *Stream) WriteMessageHybrid(segmentId uint16, msg Message) (err error) {
 	payload, err := json.Marshal(msg)
 	if err != nil {
 		return fmt.Errorf("failed to marshal message: %w", err)
@@ -137,7 +137,9 @@ func (s *Stream) WriteMessageAuto(segmentId string, msg Message) (err error) {
 		return fmt.Errorf("failed to write atom isHybrid: %w", err)
 	}
 
-	_, err = s.Write([]byte(segmentId))
+	var segmentIdBuffer [2]byte
+	binary.BigEndian.PutUint16(segmentIdBuffer[:], segmentId)
+	_, err = s.Write(segmentIdBuffer[:])
 	if err != nil {
 		return fmt.Errorf("failed to write segmentId: %w", err)
 	}

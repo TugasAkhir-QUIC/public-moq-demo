@@ -677,7 +677,7 @@ export class Player {
 				return this.handleSegment(r, msg.segment, start)
 			} else if (msg.pong) {
 				return this.handlePong(r, msg.pong)
-			}
+			} 
 		}
 	}
 
@@ -781,13 +781,14 @@ export class Player {
 			boxStartTime = boxStartOffset.toFixed(2);
 			const raw = await stream.peek(4)
 			const size = new DataView(raw.buffer, raw.byteOffset, raw.byteLength).getUint32(0)
+			// console.log(size)
 			const atom = await stream.bytes(size)
 
 			// boxes: [moof][mdat]...<idle time>...[moof][mdat]
 			// first 4 bytes => size
 			// following 4 bytes => box type
 			const boxType = fromCharCodeUint8([...atom.slice(4, 8)]);
-
+			
 			if (isVideoSegment) {
 				if (boxType === 'moof') {
 					chunkCounter++;
@@ -862,7 +863,6 @@ export class Player {
 			if (segmentTPut > 0) {
 				this.throughputs.set('chunk', segmentTPut);
 			}
-
 			segment.push(atom)
 			track.flush() // Flushes if the active segment has new samples
 		}

@@ -15,12 +15,16 @@ export class FragmentedMessageHandler {
 	//Add Parameter for StatsRef to update stats and throughput map of player.
 	private fragmentBuffers: Map<string, Uint8Array[]>;
 	private chunkBuffers: Map<string, IQueue<Uint8Array>>;
+	private chunkCount: Map<string, number>;
+	private chunkTotal: Map<string, number>;
 	private isDelayed: Map<string, boolean>;
 	private segmentStreams: Map<string, ReadableStreamDefaultController<Uint8Array>>;
 
 	constructor() {
 		this.fragmentBuffers = new Map();
 		this.chunkBuffers = new Map();
+		this.chunkCount = new Map();
+		this.chunkTotal = new Map();
 		this.isDelayed = new Map();
 		this.segmentStreams = new Map();
 	}
@@ -35,7 +39,9 @@ export class FragmentedMessageHandler {
 			return
 		}
 		
-		const segmentID = new TextDecoder('utf-8').decode(await r.bytes(8));
+		const buf = await r.bytes(2);
+		const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+		const segmentID = dv.getUint16(0).toString();
 		if (!this.segmentStreams.has(segmentID)) {
 			// console.log("STREAM CREATE ", segmentID)
 			this.initializeStream(segmentID, player);
@@ -56,8 +62,9 @@ export class FragmentedMessageHandler {
 			const raw = await r.peek(4)
 			const size = new DataView(raw.buffer, raw.byteOffset, raw.byteLength).getUint32(0)
 			
-			if (count < 2) {
-				controller.enqueue(await r.bytes(size))
+			if (count < 2) { // init & styp
+				// controller.enqueue(await r.bytes(size))
+				this.enqueueChunk(segmentID, await r.bytes(size), controller)
 			} else if (count === 2) {
 				moof = await r.bytes(size)
 			} else if (count === 3) {
@@ -65,36 +72,20 @@ export class FragmentedMessageHandler {
 				const chunk = new Uint8Array(moof.length + mdat.length)
 				chunk.set(moof)
 				chunk.set(mdat, moof.length)
-				controller.enqueue(chunk)
+				// controller.enqueue(chunk)
+				this.enqueueChunk(segmentID, chunk, controller)
 			}
 			count++
 		}
 	}
 
 	async handleDatagram(datagram: Uint8Array, player: Player) {
-		const isSegment = Boolean(datagram.at(0))
-		if (!isSegment) {
-			const stream = new ReadableStream({
-				start(controller) {
-				controller.enqueue(datagram.slice(1));
-				controller.close();
-				}
-			});
-			let r = new StreamReader(stream.getReader())
-			player.handleStream(r)
-			return
-		}  
-		const fragment = this.parseDatagram(datagram.slice(1));
-
+		const fragment = this.parseDatagram(datagram);
+			
 		if (!this.segmentStreams.has(fragment.segmentID)) {
 			// console.log("DATAGRAM CREATE ", fragment.segmentID)
 			this.initializeStream(fragment.segmentID, player);
 		}
-
-		// if (fragment.isLastChunk) {
-		// 	this.cleanup(fragment.segmentID);
-		// 	return
-		// }
 
 		this.storeFragment(fragment);
 	}
@@ -102,6 +93,7 @@ export class FragmentedMessageHandler {
 	private initializeStream(segmentID: string, player: Player) {
 		const stream = new ReadableStream<Uint8Array>({
 			start: (controller) => {
+				this.chunkCount.set(segmentID, 0);
 				this.segmentStreams.set(segmentID, controller);
 				this.isDelayed.set(segmentID, true);
 			},
@@ -111,8 +103,9 @@ export class FragmentedMessageHandler {
 			}
 		});
 		setTimeout(() => {
+			// console.log("CLEANUP", segmentID)
 			this.cleanup(segmentID);
-		}, 4000); // 3000 (?)
+		}, 3000); // 4000 (?)
 		let r = new StreamReader(stream.getReader())
 		player.handleStream(r);
 	}
@@ -125,7 +118,6 @@ export class FragmentedMessageHandler {
 		const isDelayed = this.isDelayed.get(fragment.segmentID);
 		const controller = this.segmentStreams.get(fragment.segmentID);
 		if (fragmentBuffer) {
-			// if (fragment.chunkNumber === 30 && fragment.fragmentNumber !== 3)
 			fragmentBuffer[fragment.fragmentNumber] = fragment.data;
 			if (fragmentBuffer.every(element => element !== null)) {
 				const totalLength = fragmentBuffer.reduce((acc, val) => acc + val.length, 0);
@@ -144,7 +136,8 @@ export class FragmentedMessageHandler {
 				const chunkBuffers = this.chunkBuffers.get(fragment.segmentID)
 				if (isDelayed !== undefined && controller !== undefined && chunkBuffers !== undefined) {
 					if (fragment.chunkNumber === 0) {
-						controller.enqueue(completeData)
+						// controller.enqueue(completeData)
+						this.enqueueChunk(fragment.segmentID, completeData, controller)
 						this.isDelayed.set(fragment.segmentID, false)
 					} else {
 						chunkBuffers.enqueue(completeData)
@@ -158,9 +151,46 @@ export class FragmentedMessageHandler {
 		if (isDelayed !== undefined && controller !== undefined && chunkBuffers !== undefined) {
 			if (!isDelayed) {
 				while (chunkBuffers.size() !== 0) {
-					controller.enqueue(chunkBuffers.dequeue())
+					// controller.enqueue(chunkBuffers.dequeue())
+					this.enqueueChunk(fragment.segmentID, chunkBuffers.dequeue(), controller)
 				}
 			}
+		}
+	}
+
+	private enqueueChunk(segmentID: string, chunk: Uint8Array | undefined, controller: ReadableStreamDefaultController<Uint8Array>) {
+		if (chunk === undefined) {
+			return
+		}
+		
+		const boxType = fromCharCodeUint8([...chunk.slice(4, 8)]);
+		if (boxType === 'finw') {
+			const dv = new DataView(chunk.slice(8).buffer, chunk.slice(8).byteOffset, chunk.slice(8).byteLength);
+			this.handleFin(dv.getUint16(0).toString(), dv.getUint8(2));
+			return
+		}
+
+		let count = this.chunkCount.get(segmentID)
+		if (count === undefined) {
+			return
+		}
+
+		count++
+		this.chunkCount.set(segmentID, count);
+		controller.enqueue(chunk);
+		
+		if (count === this.chunkTotal.get(segmentID)) {
+			this.cleanup(segmentID)
+		}
+	}
+
+	private handleFin(segmentID: string, chunkTotal: number) {
+		const count = this.chunkCount.get(segmentID)
+		console.log("CLOSE", segmentID, chunkTotal, count)
+		if (chunkTotal === count) {
+			this.cleanup(segmentID)
+		} else {
+			this.chunkTotal.set(segmentID, chunkTotal)
 		}
 	}
 
@@ -173,16 +203,23 @@ export class FragmentedMessageHandler {
 	}
 
 	private parseDatagram(datagram: Uint8Array): MessageFragment {
-		const utf8Decoder = new TextDecoder("utf-8");
-		const segmentID = utf8Decoder.decode(datagram.slice(0, 8));
-		const chunkID = utf8Decoder.decode(datagram.slice(8, 16));
-		const buf = datagram.slice(16, 22);
+		const buf = datagram.slice(0, 7);
 		const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
-		const chunkNumber = dv.getUint16(0);
-		const fragmentNumber = dv.getUint16(2);
-		const fragmentTotal = dv.getUint16(4);
-		const data = new Uint8Array(datagram.buffer.slice(22));
+		const segmentID = dv.getUint16(0).toString();
+		const chunkNumber = dv.getUint8(2);
+		const chunkID = segmentID.toString() + "-" + chunkNumber.toString()
+		const fragmentNumber = dv.getUint16(3);
+		const fragmentTotal = dv.getUint16(5);
+		const data = new Uint8Array(datagram.buffer.slice(7));
 
 		return { segmentID, chunkID, chunkNumber, fragmentNumber, fragmentTotal, data };
 	}
+}
+
+function fromCharCodeUint8(uint8arr: any[]) {
+	var arr = [];
+	for (var i = 0; i < uint8arr.length; i++) {
+		arr[i] = uint8arr[i];
+	}
+	return String.fromCharCode.apply(null, arr);
 }
