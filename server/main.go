@@ -20,12 +20,12 @@ func main() {
 func run(ctx context.Context) (err error) {
 	addr := flag.String("addr", ":4443", "HTTPS server address")
 	//server deploy env
-	//cert := flag.String("tls-cert", "/etc/letsencrypt/live/<domain name>/fullchain.pem", "TLS certificate file path")
-	//key := flag.String("tls-key", "/etc/letsencrypt/live/<domain name>/privkey.pem", "TLS certificate file path")
+	cert := flag.String("tls-cert", "/etc/letsencrypt/live/<domain name>/fullchain.pem", "TLS certificate file path")
+	key := flag.String("tls-key", "/etc/letsencrypt/live/<domain name>/privkey.pem", "TLS certificate file path")
 
 	//local env
-	cert := flag.String("tls-cert", "../cert/localhost.crt", "TLS certificate file path")
-	key := flag.String("tls-key", "../cert/localhost.key", "TLS certificate file path")
+	//cert := flag.String("tls-cert", "../cert/localhost.crt", "TLS certificate file path")
+	//key := flag.String("tls-key", "../cert/localhost.key", "TLS certificate file path")
 	logDir := flag.String("log-dir", "", "logs will be written to the provided directory")
 
 	dash := flag.String("dash", "../media/playlist.mpd", "DASH playlist path")
