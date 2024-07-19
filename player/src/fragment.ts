@@ -105,7 +105,7 @@ export class FragmentedMessageHandler {
 		setTimeout(() => {
 			// console.log("CLEANUP", segmentID)
 			this.cleanup(segmentID);
-		}, 3000); // 4000 (?)
+		}, 5000); // 4000 (?)
 		let r = new StreamReader(stream.getReader())
 		player.handleStream(r);
 	}

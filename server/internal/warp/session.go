@@ -353,7 +353,7 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 	ms := int(segment.timestamp / time.Millisecond)
 
 	// newer segments take priority
-	//stream.SetPriority(ms)
+	stream.SetPriority(ms)
 
 	tcRate := s.server.tcRate
 	if tcRate == -1 {
