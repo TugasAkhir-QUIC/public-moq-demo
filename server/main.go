@@ -29,6 +29,7 @@ func run(ctx context.Context) (err error) {
 	logDir := flag.String("log-dir", "", "logs will be written to the provided directory")
 
 	dash := flag.String("dash", "../media/playlist.mpd", "DASH playlist path")
+	//dash := flag.String("dash", "C:/Users/Farrel/Documents/Kuliah/SEM-8/Tugas Akhir/Repositories/test-av1/playlist.mpd", "DASH playlist path")
 
 	flag.Parse()
 

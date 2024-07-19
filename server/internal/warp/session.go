@@ -422,6 +422,13 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 			continue
 		}
 
+		if count == datagramStart {
+			err = stream.Close()
+			if err != nil {
+				return fmt.Errorf("failed to close segemnt stream: %w", err)
+			}
+		}
+
 		if string(buf[4:8]) == "moof" {
 			chunk = append(chunk, buf...)
 		}
@@ -445,11 +452,6 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 	err = datagram.Close()
 	if err != nil {
 		return fmt.Errorf("failed to close segemnt datagram: %w", err)
-	}
-
-	err = stream.Close()
-	if err != nil {
-		return fmt.Errorf("failed to close segemnt stream: %w", err)
 	}
 
 	return nil
@@ -646,6 +648,7 @@ func (s *Session) writeSegment(ctx context.Context, segment *MediaSegment) (err 
 
 		segment_size += len(buf)
 		box_count++
+		//fmt.Println(string(buf[4:8]))
 
 		if print_moof_sizes {
 			if string(buf[4:8]) == "moof" {
@@ -657,8 +660,8 @@ func (s *Session) writeSegment(ctx context.Context, segment *MediaSegment) (err 
 			}
 		}
 
-		// to generate chunk dropped
-		//if count == 6 || count == 7 {
+		//// to generate chunk dropped
+		//if count == 34 || count == 35 {
 		//	count++
 		//	continue
 		//}
