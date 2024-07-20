@@ -423,14 +423,13 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 			if string(buf[4:8]) == "mdat" || string(buf[4:8]) == "styp" {
 				count++
 			}
-			continue
-		}
-
-		if count == datagramStart {
-			err = stream.Close()
-			if err != nil {
-				return fmt.Errorf("failed to close segemnt stream: %w", err)
+			if count == datagramStart {
+				err = stream.Close()
+				if err != nil {
+					return fmt.Errorf("failed to close segemnt stream: %w", err)
+				}
 			}
+			continue
 		}
 
 		if string(buf[4:8]) == "moof" {
