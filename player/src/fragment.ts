@@ -50,6 +50,14 @@ export class FragmentedMessageHandler {
 		let count = 0
 		let moof: Uint8Array = new Uint8Array();
 		const controller = this.segmentStreams.get(segmentID)
+
+		setTimeout(() => {
+			const chunkBuffers = this.chunkBuffers.get(segmentID)
+			while (chunkBuffers !== undefined && controller !== undefined && chunkBuffers.size() !== 0) {
+				this.enqueueChunk(segmentID, chunkBuffers.dequeue(), controller)
+			}
+		}, 2100);
+
 		while (controller !== undefined) {
 			if (count === 4) { // 1 or 4
 				this.isDelayed.set(segmentID, false)
@@ -105,7 +113,7 @@ export class FragmentedMessageHandler {
 		setTimeout(() => {
 			// console.log("CLEANUP", segmentID)
 			this.cleanup(segmentID);
-		}, 5000); // 4000 (?)
+		}, 3000); // 4000 (?)
 		let r = new StreamReader(stream.getReader())
 		player.handleStream(r);
 	}
