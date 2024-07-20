@@ -332,7 +332,7 @@ func (s *Session) writeInitDatagram(ctx context.Context, init *MediaInit) (err e
 func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment) (err error) {
 	// Wrap the stream in an object that buffers writes instead of blocking.
 	datagram := NewDatagram(s.inner)
-	datagramStart := 3
+	datagramStart := 25
 	//datagram.chunkNumber = uint8(datagramStart)
 
 	temp, err := s.inner.OpenUniStreamSync(ctx)

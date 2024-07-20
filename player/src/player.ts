@@ -787,7 +787,8 @@ export class Player {
 		let chunkEnd = 0;
 		let boxStartTime;
 		// One day I'll figure it out; until then read one top-level atom at a time
-		let count = 1
+		let count = 0
+		let moof: Uint8Array = new Uint8Array();
 		while (true) {
 			if (await stream.done()) {
 				console.log('end of stream')
@@ -868,7 +869,6 @@ export class Player {
 					// 	}
 
 				}
-				count++
 			}
 			
 			totalSegmentSize += size;
@@ -880,8 +880,22 @@ export class Player {
 			if (segmentTPut > 0) {
 				this.throughputs.set('chunk', segmentTPut);
 			}
-			segment.push(atom)
-			track.flush() // Flushes if the active segment has new samples
+			if (boxType === "styp") {
+				segment.push(atom)
+				track.flush()
+				continue
+			}
+			if (count % 2 === 0) {
+				moof = atom
+			} else {
+				const mdat = atom
+				const chunk = new Uint8Array(moof.length + mdat.length)
+				chunk.set(moof)
+				chunk.set(mdat, moof.length)
+				segment.push(chunk)
+				track.flush() // Flushes if the active segment has new samples
+			}
+			count++
 		}
 		let avgSegmentLatency;
 		if(msg.init!= '4'){
