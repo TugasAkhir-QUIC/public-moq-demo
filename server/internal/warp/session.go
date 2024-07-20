@@ -353,7 +353,9 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 	ms := int(segment.timestamp / time.Millisecond)
 
 	// newer segments take priority
-	if segment.Init.ID != "4" {
+	if segment.Init.ID == "4" {
+		stream.SetPriority(1)
+	} else {
 		stream.SetPriority(ms)
 	}
 
