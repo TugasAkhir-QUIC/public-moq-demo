@@ -376,6 +376,7 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 			TcRate:           tcRate * 1024,
 			AvailabilityTime: int(time.Now().UnixMilli()),
 			ServerRemoteAddr: s.inner.RemoteAddr().String(),
+			Hybrid:           1,
 		},
 	}
 

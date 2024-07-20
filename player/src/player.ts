@@ -742,9 +742,26 @@ export class Player {
 			this.ipaddr = msg.client_addr;
 		}
 
-		const segment = new Segment(track.source, init, msg.timestamp)
-		// The track is responsible for flushing the segments in order
-		track.add(segment)
+		var segmentExist = false
+		var segment = new Segment(track.source, init, msg.timestamp)
+		const trackSegments = track.segments
+		for (let i = 0; i < trackSegments.length; i++) {
+			if (trackSegments[i].timestamp === msg.timestamp) {
+				segment = trackSegments[i]
+				segmentExist = true
+				break
+			}
+		}
+
+		if (!segmentExist) {
+			// The track is responsible for flushing the segments in order
+			track.add(segment)
+		}
+
+		if (msg.hybrid !== 1) {
+			segment.doneCount = 1
+		}
+
 
 		/* TODO I'm not actually sure why this code doesn't work; something trips up the MP4 parser
 			while (1) {
@@ -878,7 +895,6 @@ export class Player {
 			// 			`);
 			this.throughputs.set('avgSegmentLatency', Number(avgSegmentLatency));
 		}
-		// console.log('avgSegmentLatency: %d', avgSegmentLatency);
 		segment.finish()
 		let segmentFinishTime = Date.now();
 		let serverBandwidth = this.serverBandwidth;

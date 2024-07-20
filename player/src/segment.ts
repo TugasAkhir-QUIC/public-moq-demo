@@ -17,11 +17,13 @@ export class Segment {
 	output: MP4File; // MP4Box file used to write the outgoing atoms after modification.
 
 	done: boolean; // The segment has been completed
+	doneCount: number;
 
 	constructor(source: Source, init: Init, timestamp: number) {
 		this.source = source
 		this.offset = 0
 		this.done = false
+		this.doneCount = 0
 		this.timestamp = timestamp
 		this.init = init
 
@@ -49,8 +51,9 @@ export class Segment {
 	}
 
 	push(data: Uint8Array) {
+		// console.log("PRE-PUSH")
 		if (this.done) return; // ignore new data after marked done
-
+		// console.log("PUSH")
 		// Make a copy of the atom because mp4box only accepts an ArrayBuffer unfortunately
 		let box = new Uint8Array(data.byteLength);
 		box.set(data);
@@ -108,6 +111,8 @@ export class Segment {
 
 	// The segment has completed
 	finish() {
+		this.doneCount++
+		if (this.doneCount < 2) return
 		console.log(this.timestamp + " done")
 		this.done = true
 		this.flush()

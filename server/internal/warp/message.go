@@ -22,6 +22,7 @@ type MessageSegment struct {
 	TcRate           float64 `json:"tc_rate"`     // Applied tc rate
 	AvailabilityTime int     `json:"at"`          // The wallclock time at which the first byte of this object became available at the origin for successful request. - CTA 5006
 	ServerRemoteAddr string  `json:"client_addr"` // The remote address of the client
+	Hybrid           int     `json:"hybrid"`
 }
 
 type MessageDebug struct {
