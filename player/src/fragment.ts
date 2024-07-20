@@ -52,11 +52,13 @@ export class FragmentedMessageHandler {
 		const controller = this.segmentStreams.get(segmentID)
 
 		setTimeout(() => {
-			const chunkBuffers = this.chunkBuffers.get(segmentID)
-			while (chunkBuffers !== undefined && controller !== undefined && chunkBuffers.size() !== 0) {
-				this.enqueueChunk(segmentID, chunkBuffers.dequeue(), controller)
-			}
-		}, 2100);
+			setInterval(() => {
+				const chunkBuffers = this.chunkBuffers.get(segmentID)
+				while (chunkBuffers !== undefined && controller !== undefined && chunkBuffers.size() !== 0) {
+					this.enqueueChunk(segmentID, chunkBuffers.dequeue(), controller)
+				}
+			}, 500);
+		}, 1600);
 
 		while (controller !== undefined) {
 			if (count === 4) { // 1 or 4
@@ -113,7 +115,7 @@ export class FragmentedMessageHandler {
 		setTimeout(() => {
 			// console.log("CLEANUP", segmentID)
 			this.cleanup(segmentID);
-		}, 3000); // 4000 (?)
+		}, 3100); // 4000 (?)
 		let r = new StreamReader(stream.getReader())
 		player.handleStream(r);
 	}
