@@ -333,7 +333,7 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 	// Wrap the stream in an object that buffers writes instead of blocking.
 	datagram := NewDatagram(s.inner)
 	datagramStart := 3
-	datagram.chunkNumber = uint8(datagramStart)
+	//datagram.chunkNumber = uint8(datagramStart)
 
 	temp, err := s.inner.OpenUniStreamSync(ctx)
 	if err != nil {
@@ -379,10 +379,14 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 		},
 	}
 
-	segmentId := datagram.ID
-	err = stream.WriteMessageHybrid(segmentId, init_message)
+	err = stream.WriteMessage(init_message)
 	if err != nil {
 		return fmt.Errorf("failed to write segment data: %w", err)
+	}
+
+	err = datagram.WriteMessage(init_message)
+	if err != nil {
+		return fmt.Errorf("failed to write segment header: %w", err)
 	}
 
 	count := 1

@@ -103,10 +103,10 @@ func (s *Stream) WriteMessage(msg Message) (err error) {
 	var size [4]byte
 	binary.BigEndian.PutUint32(size[:], uint32(len(payload)+8))
 
-	_, err = s.Write([]byte{0})
-	if err != nil {
-		return fmt.Errorf("failed to write atom isHybrid: %w", err)
-	}
+	//_, err = s.Write([]byte{0})
+	//if err != nil {
+	//	return fmt.Errorf("failed to write atom isHybrid: %w", err)
+	//}
 
 	_, err = s.Write(size[:])
 	if err != nil {

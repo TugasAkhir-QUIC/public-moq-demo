@@ -647,7 +647,7 @@ export class Player {
 			const stream = result.value
 			let r = new StreamReader(stream.getReader())
 			
-			this.fragment.handleStream(r, this) // don't await
+			this.handleStream(r) // don't await
 		}
 	}
 
