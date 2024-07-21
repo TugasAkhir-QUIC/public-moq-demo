@@ -12,10 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/TugasAkhir-QUIC/quic-go"
-	"github.com/TugasAkhir-QUIC/quic-go/http3"
-	"github.com/TugasAkhir-QUIC/webtransport-go"
 	"github.com/kixelated/invoker"
+	"github.com/quic-go/quic-go/http3"
+	"github.com/quic-go/webtransport-go"
 )
 
 type Server struct {
@@ -46,7 +45,7 @@ func NewServer(config ServerConfig, media *Media) (s *Server, err error) {
 	s.continueStreaming = true
 	s.tcRate = -1
 
-	quicConfig := &quic.Config{}
+	//quicConfig := &quic.Config{}
 
 	//if config.LogDir != "" {
 	//	quicConfig.Tracer = qlog.NewTracer(func(p logging.Perspective, connectionID []byte) io.WriteCloser {
@@ -71,10 +70,10 @@ func NewServer(config ServerConfig, media *Media) (s *Server, err error) {
 
 	s.inner = &webtransport.Server{
 		H3: http3.Server{
-			TLSConfig:  tlsConfig,
-			QuicConfig: quicConfig,
-			Addr:       config.Addr,
-			Handler:    mux,
+			TLSConfig: tlsConfig,
+			//QuicConfig: quicConfig,
+			Addr:    config.Addr,
+			Handler: mux,
 		},
 		CheckOrigin: func(r *http.Request) bool { return true },
 	}
@@ -340,7 +339,7 @@ func (s *Server) Run(ctx context.Context) (err error) {
 	return invoker.Run(ctx, s.runServe, s.runTcProfile, s.runShutdown, s.sessions.Repeat)
 }
 
-func (s *Server) serve(ctx context.Context, conn quic.Connection, sess *webtransport.Session) (err error) {
+func (s *Server) serve(ctx context.Context, conn http3.Connection, sess *webtransport.Session) (err error) {
 	defer func() {
 		if err != nil {
 			sess.CloseWithError(1, err.Error())

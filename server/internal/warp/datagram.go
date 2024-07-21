@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/TugasAkhir-QUIC/webtransport-go"
+	"github.com/quic-go/webtransport-go"
 	"sync/atomic"
 )
 

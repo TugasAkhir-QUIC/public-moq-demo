@@ -6,19 +6,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/TugasAkhir-QUIC/webtransport-go"
+	"github.com/quic-go/quic-go/http3"
+	"github.com/quic-go/webtransport-go"
 	"io"
 	"log"
-	"math"
 	"time"
 
-	"github.com/TugasAkhir-QUIC/quic-go"
 	"github.com/kixelated/invoker"
 )
 
 // A single WebTransport session
 type Session struct {
-	conn  quic.Connection
+	conn  http3.Connection
 	inner *webtransport.Session
 	// TODO: Add support for datagram
 
@@ -41,7 +40,7 @@ type Session struct {
 	videoTimeOffset time.Duration
 }
 
-func NewSession(connection quic.Connection, session *webtransport.Session, media *Media, server *Server) (s *Session, err error) {
+func NewSession(connection http3.Connection, session *webtransport.Session, media *Media, server *Server) (s *Session, err error) {
 	s = new(Session)
 	s.server = server
 	s.conn = connection
@@ -55,7 +54,9 @@ func NewSession(connection quic.Connection, session *webtransport.Session, media
 }
 
 func (s *Session) Run(ctx context.Context) (err error) {
-	s.inits, s.audio, s.video, err = s.media.Start(s.conn.GetMaxBandwidth)
+	s.inits, s.audio, s.video, err = s.media.Start(func() uint64 {
+		return 4500000
+	})
 	s.prefs = make(map[string]string)
 	if err != nil {
 		return fmt.Errorf("failed to start media: %w", err)
@@ -288,7 +289,7 @@ func (s *Session) writeInit(ctx context.Context, init *MediaInit) (err error) {
 		}
 	}()
 
-	stream.SetPriority(math.MaxInt)
+	//stream.SetPriority(math.MaxInt)
 
 	err = stream.WriteMessage(Message{
 		Init: &MessageInit{Id: init.ID},
@@ -353,7 +354,7 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 	ms := int(segment.timestamp / time.Millisecond)
 
 	// newer segments take priority
-	stream.SetPriority(ms)
+	//stream.SetPriority(ms)
 
 	tcRate := s.server.tcRate
 	if tcRate == -1 {
@@ -370,9 +371,9 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 
 	init_message := Message{
 		Segment: &MessageSegment{
-			Init:             segment.Init.ID,
-			Timestamp:        ms,
-			ETP:              int(s.conn.GetMaxBandwidth() / 1024),
+			Init:      segment.Init.ID,
+			Timestamp: ms,
+			//ETP:              int(s.conn.GetMaxBandwidth() / 1024),
 			TcRate:           tcRate * 1024,
 			AvailabilityTime: int(time.Now().UnixMilli()),
 			ServerRemoteAddr: s.inner.RemoteAddr().String(),
@@ -479,9 +480,9 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 
 	init_message := Message{
 		Segment: &MessageSegment{
-			Init:             segment.Init.ID,
-			Timestamp:        ms,
-			ETP:              int(s.conn.GetMaxBandwidth() / 1024),
+			Init:      segment.Init.ID,
+			Timestamp: ms,
+			//ETP:              int(s.conn.GetMaxBandwidth() / 1024),
 			TcRate:           tcRate * 1024,
 			AvailabilityTime: int(time.Now().UnixMilli()),
 			ServerRemoteAddr: s.inner.RemoteAddr().String(),
@@ -567,7 +568,7 @@ func (s *Session) writeSegment(ctx context.Context, segment *MediaSegment) (err 
 	ms := int(segment.timestamp / time.Millisecond)
 
 	// newer segments take priority
-	stream.SetPriority(ms)
+	//stream.SetPriority(ms)
 
 	tcRate := s.server.tcRate
 	if tcRate == -1 {
@@ -576,9 +577,9 @@ func (s *Session) writeSegment(ctx context.Context, segment *MediaSegment) (err 
 
 	init_message := Message{
 		Segment: &MessageSegment{
-			Init:             segment.Init.ID,
-			Timestamp:        ms,
-			ETP:              int(s.conn.GetMaxBandwidth() / 1024),
+			Init:      segment.Init.ID,
+			Timestamp: ms,
+			//ETP:              int(s.conn.GetMaxBandwidth() / 1024),
 			TcRate:           tcRate * 1024,
 			AvailabilityTime: int(time.Now().UnixMilli()),
 			ServerRemoteAddr: s.inner.RemoteAddr().String(),
@@ -689,7 +690,7 @@ func (s *Session) writeSegment(ctx context.Context, segment *MediaSegment) (err 
 
 func (s *Session) setDebug(msg *MessageDebug) {
 	if msg.MaxBitrate != nil {
-		s.conn.SetMaxBandwidth(uint64(*msg.MaxBitrate))
+		//s.conn.SetMaxBandwidth(uint64(*msg.MaxBitrate))
 	} else if msg.ContinueStreaming != nil {
 		s.continueStreaming = *msg.ContinueStreaming
 		s.server.continueStreaming = *msg.ContinueStreaming
