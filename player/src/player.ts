@@ -803,6 +803,9 @@ export class Player {
 					const chunkSize = size + lastMoofSize; // bytes
 					totalChunkSize += chunkSize;
 					const chunkLatency = Math.round(lastMoofClockTime - msg.at);
+					if (chunkCounter === 1) {
+						console.log("LATENCY", chunkCounter, chunkLatency, chunkSize)
+					}
 					chunkEnd = performance.now() - moofClockTime;
 					++this.totalChunkCount;
 

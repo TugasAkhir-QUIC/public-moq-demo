@@ -51,18 +51,22 @@ export class FragmentedMessageHandler {
 		let moof: Uint8Array = new Uint8Array();
 		const controller = this.segmentStreams.get(segmentID)
 
-		setTimeout(() => {
-			setInterval(() => {
-				const chunkBuffers = this.chunkBuffers.get(segmentID)
-				while (chunkBuffers !== undefined && controller !== undefined && chunkBuffers.size() !== 0) {
-					this.enqueueChunk(segmentID, chunkBuffers.dequeue(), controller)
-				}
-			}, 500);
-		}, 1600);
+		// setTimeout(() => {
+		// 	setInterval(() => {
+		// 		const chunkBuffers = this.chunkBuffers.get(segmentID)
+		// 		while (chunkBuffers !== undefined && controller !== undefined && chunkBuffers.size() !== 0) {
+		// 			this.enqueueChunk(segmentID, chunkBuffers.dequeue(), controller)
+		// 		}
+		// 	}, 500);
+		// }, 2100);
 
 		while (controller !== undefined) {
 			if (count === 4) { // 1 or 4
 				this.isDelayed.set(segmentID, false)
+				const chunkBuffers = this.chunkBuffers.get(segmentID)
+				while (chunkBuffers !== undefined && controller !== undefined && chunkBuffers.size() !== 0) {
+					this.enqueueChunk(segmentID, chunkBuffers.dequeue(), controller)
+				}
 			}
 			if (await r.done()) {
 				console.log('end of stream')
@@ -75,14 +79,15 @@ export class FragmentedMessageHandler {
 			if (count < 2) { // init & styp
 				// controller.enqueue(await r.bytes(size))
 				this.enqueueChunk(segmentID, await r.bytes(size), controller)
-			} else if (count === 2) {
+			} else if (count % 2 === 0) {
 				moof = await r.bytes(size)
-			} else if (count === 3) {
+			} else if (count % 2 !== 0) {
 				const mdat = await r.bytes(size)
 				const chunk = new Uint8Array(moof.length + mdat.length)
 				chunk.set(moof)
 				chunk.set(mdat, moof.length)
 				// controller.enqueue(chunk)
+				console.log(chunk.length)
 				this.enqueueChunk(segmentID, chunk, controller)
 			}
 			count++
@@ -196,7 +201,7 @@ export class FragmentedMessageHandler {
 
 	private handleFin(segmentID: string, chunkTotal: number) {
 		const count = this.chunkCount.get(segmentID)
-		console.log("CLOSE", segmentID, chunkTotal, count)
+		// console.log("CLOSE", segmentID, chunkTotal, count)
 		if (chunkTotal === count) {
 			this.cleanup(segmentID)
 		} else {
