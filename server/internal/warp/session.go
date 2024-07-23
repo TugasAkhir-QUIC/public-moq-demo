@@ -459,6 +459,7 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 
 func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegment) (err error) {
 	datagram := NewDatagram(s.inner)
+	s.streams.Add(datagram.Run)
 
 	ms := int(segment.timestamp / time.Millisecond)
 	if ms == 0 {
