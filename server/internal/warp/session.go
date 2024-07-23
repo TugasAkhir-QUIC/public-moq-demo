@@ -240,7 +240,7 @@ func (s *Session) runVideo(ctx context.Context) (err error) {
 			// reset start
 			start = time.Now()
 		}
-
+		now := time.Now().UnixMilli()
 		segment, err := s.video.Next(ctx, s, s.videoTimeOffset)
 		if err != nil {
 			return fmt.Errorf("failed to get next segment: %w", err)
@@ -268,6 +268,7 @@ func (s *Session) runVideo(ctx context.Context) (err error) {
 				return fmt.Errorf("failed to write segment hybrid: %w", err)
 			}
 		}
+		latencies = append(latencies, time.Now().UnixMilli()-now)
 	}
 }
 
@@ -537,7 +538,7 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 	// for debug purposes
 	//fmt.Printf("CATEGORY: %d\n", s.category)
 	//fmt.Printf("DATAGRAM SEGMENT WRITTEN || ")
-	fmt.Printf("* id: %s ts: %d etp: %d segment size: %d box count:%d chunk count: %d\n", init_message.Segment.Init, init_message.Segment.Timestamp, init_message.Segment.ETP, segment_size, box_count, count)
+	fmt.Printf("* id: %s ts: %d etp: %d segment size: %d box count:%d chunk count: %d\n", init_message.Segment.Init, init_message.Segment.Timestamp, init_message.Segment.ETP, segment_size, box_count, chunk_count)
 	//logtoCSV("DATAGRAM", init_message.Segment.Timestamp, segment_size, s.inner.LocalAddr().String(), s.inner.RemoteAddr().String(), s.isAuto)
 	err = datagram.Close()
 	if err != nil {
@@ -546,6 +547,8 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 
 	return nil
 }
+
+var latencies []int64
 
 // Create a stream for a segment and write the contents, chunk by chunk.
 func (s *Session) writeSegment(ctx context.Context, segment *MediaSegment) (err error) {
@@ -693,12 +696,22 @@ func (s *Session) setDebug(msg *MessageDebug) {
 	} else if msg.ContinueStreaming != nil {
 		s.continueStreaming = *msg.ContinueStreaming
 		s.server.continueStreaming = *msg.ContinueStreaming
+		average()
 	} else if *msg.TcReset {
 		// setting tcRate to -1 is a signal to reset tc rate
 		s.server.tcRate = -1
 		s.server.isTcActive = false
 		s.server.continueStreaming = true
 	}
+}
+
+func average() {
+	sum := int64(0)
+	for i := 0; i < len(latencies); i++ {
+		sum += latencies[i]
+	}
+	fmt.Println("AVERAGE", sum/int64(len(latencies)))
+	latencies = []int64{}
 }
 
 func (s *Session) setSwitch(msg *MessageCategory) {

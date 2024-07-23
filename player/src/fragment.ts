@@ -31,7 +31,7 @@ export class FragmentedMessageHandler {
 
 	// warp, styp, moof & mdat (I-frame)
 	async handleStream(r: StreamReader, player: Player) {
-		console.log("Masuk handleStream Fragment")
+		// console.log("Masuk handleStream Fragment")
 		const isHybrid = Boolean((await r.bytes(1)).at(0))
 		if (!isHybrid) {
 			// console.log("stream masuk 2")

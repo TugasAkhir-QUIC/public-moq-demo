@@ -870,8 +870,10 @@ export class Player {
 			track.flush() // Flushes if the active segment has new samples
 		}
 		let avgSegmentLatency;
+		let avgSegmentLatency2;
 		if(msg.init!= '4'){
 			avgSegmentLatency = this.calculateAverageChunkLatency(chunkLatencies).toFixed(2);
+			avgSegmentLatency2 = this.calculateAverageChunkLatency2(chunkLatencies).toFixed(2);
 			// console.log(`
 			// 			=====================================================
 			// 			segment timestamp : ${msg.timestamp}
@@ -906,6 +908,8 @@ export class Player {
 						totalChunks: chunkCounter,
 						size: totalSegmentSize,
 						latency: avgSegmentLatency,
+						latency2: avgSegmentLatency2,
+						latencyFirstChunk: chunkLatencies[0],
 						startTime: segmentStartTime,
 						endTime: segmentDateFinish,
 						bandwidth: serverBandwidthInMegabits,
@@ -922,6 +926,8 @@ export class Player {
 						totalChunks: chunkCounter,
 						size: totalSegmentSize,
 						latency: avgSegmentLatency,
+						latency2: avgSegmentLatency2,
+						latencyFirstChunk: chunkLatencies[0],
 						startTime: segmentStartTime,
 						endTime: segmentDateFinish,
 						bandwidth: serverBandwidthInMegabits,
@@ -1019,6 +1025,7 @@ export class Player {
 		let chunkLatencies: number[] = [];
 	
 		// Loop through the arrival times and calculate the differences
+		console.log(arrivalTimes.length)
 		for (let i = 1; i < arrivalTimes.length; i++) {
 			let latency = arrivalTimes[i] - arrivalTimes[i - 1];
 			chunkLatencies.push(latency);
@@ -1027,6 +1034,20 @@ export class Player {
 		// Calculate the average latency
 		const totalLatency = chunkLatencies.reduce((sum, latency) => sum + latency, 0);
 		const averageLatency = totalLatency / chunkLatencies.length;
+	
+		return averageLatency;
+	}
+
+	calculateAverageChunkLatency2(latencies: number[]): number {	
+		// Calculate the average latency
+		let totalLatency = 0;
+
+		console.log(latencies.length)
+		for (let i = 0; i < latencies.length; i++) {
+			totalLatency += latencies[i]
+		}
+
+		const averageLatency = totalLatency / latencies.length;
 	
 		return averageLatency;
 	}
