@@ -309,6 +309,7 @@ func (s *Session) writeInit(ctx context.Context, init *MediaInit) (err error) {
 
 func (s *Session) writeInitDatagram(ctx context.Context, init *MediaInit) (err error) {
 	datagram := NewDatagram(s.inner)
+	s.streams.Add(datagram.Run)
 
 	err = datagram.WriteMessage(Message{
 		Init: &MessageInit{Id: init.ID},
@@ -333,6 +334,7 @@ func (s *Session) writeInitDatagram(ctx context.Context, init *MediaInit) (err e
 func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment) (err error) {
 	// Wrap the stream in an object that buffers writes instead of blocking.
 	datagram := NewDatagram(s.inner)
+	s.streams.Add(datagram.Run)
 	datagramStart := 3
 	datagram.chunkNumber = uint8(datagramStart)
 
