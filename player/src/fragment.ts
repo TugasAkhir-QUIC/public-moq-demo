@@ -92,6 +92,25 @@ export class FragmentedMessageHandler {
 			}
 			count++
 		}
+
+		// while (controller !== undefined) {
+		// 	if (await r.done()) {
+		// 		this.isDelayed.set(segmentID, false)
+		// 		const chunkBuffers = this.chunkBuffers.get(segmentID)
+		// 		while (chunkBuffers !== undefined && controller !== undefined && chunkBuffers.size() !== 0) {
+		// 			this.enqueueChunk(segmentID, chunkBuffers.dequeue(), controller)
+		// 		}
+		// 		console.log('end of stream')
+		// 		break;
+		// 	}
+
+		// 	controller.enqueue(await r.read())
+		// }
+		// let count = this.chunkCount.get(segmentID)
+		// if (count === undefined) {
+		// 	return
+		// }
+		// this.chunkCount.set(segmentID, count+3);
 	}
 
 	async handleDatagram(datagram: Uint8Array, player: Player) {
@@ -192,7 +211,11 @@ export class FragmentedMessageHandler {
 
 		count++
 		this.chunkCount.set(segmentID, count);
-		controller.enqueue(chunk);
+		try {
+			controller.enqueue(chunk);
+		} catch {
+			throw "controller is closed"
+		}
 		
 		if (count === this.chunkTotal.get(segmentID)) {
 			this.cleanup(segmentID)
@@ -201,7 +224,7 @@ export class FragmentedMessageHandler {
 
 	private handleFin(segmentID: string, chunkTotal: number) {
 		const count = this.chunkCount.get(segmentID)
-		// console.log("CLOSE", segmentID, chunkTotal, count)
+		console.log("CLOSE", segmentID, chunkTotal, count)
 		if (chunkTotal === count) {
 			this.cleanup(segmentID)
 		} else {
