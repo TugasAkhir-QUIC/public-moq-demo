@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"github.com/TugasAkhir-QUIC/quic-go"
+	"github.com/TugasAkhir-QUIC/quic-go/logging"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -12,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/TugasAkhir-QUIC/quic-go"
 	"github.com/TugasAkhir-QUIC/quic-go/http3"
 	"github.com/TugasAkhir-QUIC/webtransport-go"
 	"github.com/kixelated/invoker"
@@ -61,6 +62,34 @@ func NewServer(config ServerConfig, media *Media) (s *Server, err error) {
 	//		return f
 	//	})
 	//}
+	quicConfig.Tracer = func(ctx context.Context, p logging.Perspective, connID quic.ConnectionID) *logging.ConnectionTracer {
+		return &logging.ConnectionTracer{
+			//BufferedPacket: func(p logging.PacketType, b logging.ByteCount) {
+			//	fmt.Println(p)
+			//},
+			//SentShortHeaderPacket: func(header *logging.ShortHeader, count logging.ByteCount, ecn logging.ECN, frame *logging.AckFrame, frames []logging.Frame) {
+			//	for _, frame := range frames {
+			//		switch f := frame.(type) {
+			//		case *logging.CryptoFrame:
+			//
+			//			fmt.Println("This is a CryptoFrame")
+			//		case *logging.StreamFrame:
+			//			fmt.Print(" ", f.StreamID)
+			//			//fmt.Println("This is a StreamFrame", f)
+			//		case *logging.DatagramFrame:
+			//
+			//			fmt.Println("This is a DatagramFrame")
+			//		default:
+			//			fmt.Println("Unknown frame type")
+			//		}
+			//	}
+			//	fmt.Print("\n")
+			//},
+			//SentLongHeaderPacket: func(header *logging.ExtendedHeader, count logging.ByteCount, ecn logging.ECN, frame *logging.AckFrame, frames []logging.Frame) {
+			//	fmt.Println(time.Now())
+			//},
+		}
+	}
 
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{*config.Cert},

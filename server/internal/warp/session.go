@@ -18,8 +18,9 @@ import (
 
 // A single WebTransport session
 type Session struct {
-	conn  quic.Connection
-	inner *webtransport.Session
+	conn         quic.Connection
+	inner        *webtransport.Session
+	sendDatagram *SendDatagram
 	// TODO: Add support for datagram
 
 	media *Media
@@ -46,6 +47,7 @@ func NewSession(connection quic.Connection, session *webtransport.Session, media
 	s.server = server
 	s.conn = connection
 	s.inner = session
+	s.sendDatagram = newSendDatagram(session)
 	s.media = media
 	s.continueStreaming = true
 	s.server.continueStreaming = true
@@ -227,6 +229,7 @@ func (s *Session) runAudio(ctx context.Context) (err error) {
 
 func (s *Session) runVideo(ctx context.Context) (err error) {
 	start := time.Now()
+	//for i := 0; i < 7; i++ {
 	for {
 		if !s.continueStreaming {
 			// Sleep to let cpu off
@@ -270,6 +273,7 @@ func (s *Session) runVideo(ctx context.Context) (err error) {
 		}
 		latencies = append(latencies, time.Now().UnixMilli()-now)
 	}
+	return nil
 }
 
 // Create a stream for an INIT segment and write the container.
@@ -334,6 +338,7 @@ func (s *Session) writeInitDatagram(ctx context.Context, init *MediaInit) (err e
 func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment) (err error) {
 	// Wrap the stream in an object that buffers writes instead of blocking.
 	datagram := NewDatagram(s.inner)
+	datagram.isDelayed = true
 	s.streams.Add(datagram.Run)
 	datagramStart := 3
 	datagram.chunkNumber = uint8(datagramStart)
@@ -345,6 +350,7 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 
 	// Wrap the stream in an object that buffers writes instead of blocking.
 	stream := NewStream(temp)
+	stream.delayDatagram = datagram.delayNotify
 	s.streams.Add(stream.Run)
 
 	defer func() {

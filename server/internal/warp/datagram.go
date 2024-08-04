@@ -22,10 +22,13 @@ type Datagram struct {
 	maxSize     int
 
 	chunks [][]byte
+	closed bool
 	err    error
 
-	notify chan struct{}
-	mutex  sync.Mutex
+	notify      chan struct{}
+	delayNotify chan struct{}
+	isDelayed   bool
+	mutex       sync.Mutex
 }
 
 func NewDatagram(inner *webtransport.Session) (d *Datagram) {
@@ -37,6 +40,8 @@ func NewDatagram(inner *webtransport.Session) (d *Datagram) {
 	// diatas 1415 (1392 + header(23)), diterima client sudah dipotong2
 	// cek const MaxPacketBufferSize = 1452 di quic-go
 	d.notify = make(chan struct{})
+	d.delayNotify = make(chan struct{})
+	d.isDelayed = false
 	return d
 }
 
@@ -47,11 +52,16 @@ func (d *Datagram) Run(ctx context.Context) (err error) {
 		d.mutex.Unlock()
 	}()
 
+	if d.isDelayed {
+		<-d.delayNotify
+	}
+
 	for {
 		d.mutex.Lock()
 
 		chunks := d.chunks
 		notify := d.notify
+		closed := d.closed
 
 		d.chunks = d.chunks[len(d.chunks):]
 		d.mutex.Unlock()
@@ -59,11 +69,34 @@ func (d *Datagram) Run(ctx context.Context) (err error) {
 		//if len(chunks) != 0 {
 		//	fmt.Println(len(chunks))
 		//}
+		if closed {
+			return err
+		}
+
 		for _, chunk := range chunks {
-			err = d.inner.SendDatagram(chunk)
-			if err != nil {
-				return err
+			chunkLength := len(chunk)
+			totalFragments := chunkLength / d.maxSize
+			if chunkLength%d.maxSize != 0 {
+				totalFragments++
 			}
+			// TODO: make sure totalFragments <  65,535
+			for i := 0; i < totalFragments; i++ {
+				start := i * d.maxSize
+				var end int
+				if i == totalFragments-1 && chunkLength%d.maxSize != 0 {
+					end = start + chunkLength%d.maxSize
+				} else {
+					end = start + d.maxSize
+				}
+
+				header := d.generateHeader(uint16(i), uint16(totalFragments))
+				err := d.inner.SendDatagram(append(header, chunk[start:end]...))
+				//fmt.Println("SENDING DATAGRAM", d.chunkNumber, d.ID)
+				if err != nil {
+					return err
+				}
+			}
+			d.chunkNumber++
 		}
 
 		if len(chunks) == 0 {
@@ -80,29 +113,13 @@ func (d *Datagram) Write(buf []byte) (n int, err error) {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 
-	chunkLength := len(buf)
-	totalFragments := chunkLength / d.maxSize
-	if chunkLength%d.maxSize != 0 {
-		totalFragments++
+	if d.err != nil {
+		return 0, d.err
 	}
-	// TODO: make sure totalFragments <  65,535
-	for i := 0; i < totalFragments; i++ {
-		start := i * d.maxSize
-		var end int
-		if i == totalFragments-1 && chunkLength%d.maxSize != 0 {
-			end = start + chunkLength%d.maxSize
-		} else {
-			end = start + d.maxSize
-		}
 
-		header := d.generateHeader(uint16(i), uint16(totalFragments))
-		//err := d.inner.SendDatagram(append(header, buf[start:end]...))
-		d.chunks = append(d.chunks, append(header, buf[start:end]...))
-		if err != nil {
-			return len(buf[:start]), err
-		}
-	}
-	d.chunkNumber++
+	// Make a copy of the buffer so it's long lived
+	buf = append([]byte{}, buf...)
+	d.chunks = append(d.chunks, buf)
 
 	// Wake up the writer
 	close(d.notify)
@@ -176,6 +193,15 @@ func (d *Datagram) Close() (err error) {
 	if err != nil {
 		return fmt.Errorf("failed to write message: %w", err)
 	}
+
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+
+	d.closed = true
+
+	// Wake up the writer
+	close(d.notify)
+	d.notify = make(chan struct{})
 
 	return nil
 }

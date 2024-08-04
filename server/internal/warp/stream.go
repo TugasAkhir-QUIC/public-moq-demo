@@ -19,8 +19,9 @@ type Stream struct {
 	closed bool
 	err    error
 
-	notify chan struct{}
-	mutex  sync.Mutex
+	notify        chan struct{}
+	delayDatagram chan struct{}
+	mutex         sync.Mutex
 }
 
 func NewStream(inner webtransport.SendStream) (s *Stream) {
@@ -58,7 +59,10 @@ func (s *Stream) Run(ctx context.Context) (err error) {
 		}
 
 		if closed {
-			return s.inner.Close()
+			err = s.inner.Close()
+			//fmt.Println("STREAM FINISHED")
+			s.delayDatagram <- struct{}{}
+			return err
 		}
 
 		if len(chunks) == 0 {
@@ -182,10 +186,6 @@ func (s *Stream) Close() (err error) {
 	}
 
 	s.closed = true
-
-	// Wake up the writer
-	close(s.notify)
-	s.notify = make(chan struct{})
 
 	return nil
 }
